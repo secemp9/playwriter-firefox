@@ -44,6 +44,30 @@ class SimplifiedExtension {
     }
   }
 
+  private async _waitForServer(): Promise<WebSocket> {
+    const httpUrl = 'http://localhost:9988';
+
+    while (true) {
+      try {
+        debugLog('Checking if relay server is available...');
+        await fetch(httpUrl, { method: 'HEAD' });
+        debugLog('Server is available, connecting WebSocket...');
+
+        const socket = new WebSocket(RELAY_URL);
+        await new Promise<void>((resolve, reject) => {
+          socket.onopen = () => resolve();
+          socket.onerror = (e) => reject(e);
+          setTimeout(() => reject(new Error('Connection timeout')), 2000);
+        });
+        debugLog('Connected to relay server');
+        return socket;
+      } catch (error: any) {
+        debugLog(`Server not available, retrying in 1 second...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
   private async _connect(tabId: number): Promise<void> {
     try {
       debugLog(`Connecting to tab ${tabId}`);
@@ -57,6 +81,7 @@ class SimplifiedExtension {
       // Update icon to show connecting state
       await this._updateIcon(tabId, 'connecting');
 
+      await this._waitForServer()
       // Connect to WebSocket relay
       const socket = new WebSocket(RELAY_URL);
       await new Promise<void>((resolve, reject) => {
