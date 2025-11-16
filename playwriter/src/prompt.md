@@ -18,6 +18,7 @@ you can control the browser in collaboration with the user. the user can help yo
 
 - only call `page.close()` if the user asks you so or if you previously created this page yourself with `newPage`. do not close user created pages unless asked
 - try to never sleep or run `page.waitForTimeout` unless you have to. there are better ways to wait for an element
+- never close browser or context. NEVER call `browser.close()`
 
 ## event listeners
 
