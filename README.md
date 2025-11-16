@@ -7,6 +7,8 @@
     <br/>
 </div>
 
+
+
 ## Comparison
 
 ### BrowserMCP
@@ -34,3 +36,28 @@ Navigation:
 - `browsermcp_browser_press_key` - Press a key on the keyboard
   Utilities:
 - `browsermcp_browser_wait` - Wait for a specified time in seconds
+
+
+### Using with Playwright
+
+You can use playwriter programmatically with playwright-core:
+
+```typescript
+import { chromium } from 'playwright-core'
+import { startPlayWriterCDPRelayServer, getCdpUrl } from 'playwriter'
+
+const port = 19987
+const server = await startPlayWriterCDPRelayServer({ port })
+
+
+const browser = await chromium.connectOverCDP(getCdpUrl({ port }))
+
+const context = browser.contexts()[0]
+const page = context.pages()[0]
+
+await page.goto('https://example.com')
+await page.screenshot({ path: 'screenshot.png' })
+
+await browser.close()
+server.close()
+```

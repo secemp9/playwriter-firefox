@@ -20,7 +20,7 @@ type PlaywrightClient = {
   ws: WSContext
 }
 
-export async function startPlayWriterCDPRelayServer({ port = 19988, logger = console }: { port?: number; logger?: { log(...args: any[]): void; error(...args: any[]): void } } = {}) {
+export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.0.0.1', logger = console }: { port?: number; host?: string; logger?: { log(...args: any[]): void; error(...args: any[]): void } } = {}) {
   const connectedTargets = new Map<string, ConnectedTarget>()
 
   const playwrightClients = new Map<string, PlaywrightClient>()
@@ -461,20 +461,20 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, logger = con
     }
   }))
 
-  const server = serve({ fetch: app.fetch, port })
+  const server = serve({ fetch: app.fetch, port, hostname: host })
   injectWebSocket(server)
 
-  const wsHost = `ws://localhost:${port}`
+  const wsHost = `ws://${host}:${port}`
   const cdpEndpoint = `${wsHost}/cdp`
   const extensionEndpoint = `${wsHost}/extension`
 
   logger.log('CDP relay server started')
+  logger.log('Host:', host)
+  logger.log('Port:', port)
   logger.log('Extension endpoint:', extensionEndpoint)
   logger.log('CDP endpoint:', cdpEndpoint)
 
   return {
-    cdpEndpoint,
-    extensionEndpoint,
     close() {
       for (const client of playwrightClients.values()) {
         client.ws.close(1000, 'Server stopped')

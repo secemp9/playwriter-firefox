@@ -7,6 +7,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import vm from 'node:vm'
+import { getCdpUrl } from './utils.js'
 
 const require = createRequire(import.meta.url)
 
@@ -67,7 +68,7 @@ async function ensureConnection(): Promise<{ browser: Browser; page: Page }> {
 
   await ensureRelayServer()
 
-  const cdpEndpoint = `ws://localhost:${RELAY_PORT}/cdp/${Date.now()}`
+  const cdpEndpoint = getCdpUrl({ port: RELAY_PORT })
   const browser = await chromium.connectOverCDP(cdpEndpoint)
 
   const contexts = browser.contexts()

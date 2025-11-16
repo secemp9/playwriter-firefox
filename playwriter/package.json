@@ -3,6 +3,8 @@
   "description": "",
   "version": "0.0.5",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "repository": "https://github.com/remorses/playwriter",
   "scripts": {
     "build": "rm -rf dist *.tsbuildinfo && mkdir dist && cp src/resource.md src/prompt.md dist/ && tsc",
