@@ -1,13 +1,13 @@
 {
     "name": "@playwright/mcp-extension",
-    "version": "0.0.46",
+    "version": "0.0.48",
     "description": "Playwright MCP Browser Extension",
     "private": true,
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/microsoft/playwright-mcp.git"
+        "url": "git+https://github.com/remorses/playwriter.git"
     },
-    "homepage": "https://playwright.dev",
+    "homepage": "https://github.com/remorses/playwriter",
     "engines": {
         "node": ">=18"
     },

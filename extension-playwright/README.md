@@ -54,7 +54,7 @@ Playwriter MCP runs locally in your browser and does not send any data to extern
 
 ## Support
 
-For issues, feature requests, or contributions, visit the [GitHub repository](https://github.com/microsoft/playwright-mcp).
+For issues, feature requests, or contributions, visit the [GitHub repository](https://github.com/remorses/playwriter).
 
 ## License
 

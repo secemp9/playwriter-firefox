@@ -43,7 +43,7 @@ export class RelayConnection {
   private _ws: WebSocket;
   private _closed = false;
   private _onCloseCallback?: () => void;
-  private _onTabDetachedCallback?: (tabId: number, reason: chrome.debugger.DetachReason) => void
+  private _onTabDetachedCallback?: (tabId: number, reason: `${chrome.debugger.DetachReason}`) => void
 
   constructor({ ws, onClose, onTabDetached }: {
     ws: WebSocket;

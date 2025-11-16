@@ -33,6 +33,10 @@ export default defineConfig({
         {
           src: resolve(__dirname, 'manifest.json'),
           dest: '.'
+        },
+        {
+          src: resolve(__dirname, 'welcome.html'),
+          dest: '.'
         }
       ]
     })

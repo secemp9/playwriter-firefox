@@ -33,6 +33,12 @@ async function resetDebugger() {
 }
 resetDebugger()
 
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    void chrome.tabs.create({ url: 'welcome.html' })
+  }
+})
+
 const icons = {
   connected: {
     path: {
