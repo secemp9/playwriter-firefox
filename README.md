@@ -2,7 +2,7 @@
     <br/>
     <br/>
     <h3>playwriter</h3>
-    <p>project under development</p>
+    <p>Like Playwright MCP but running on your existing Chrome window via extension. 90% less context window used. 10x more capable (full playwright API)</p>
     <br/>
     <br/>
 </div>
