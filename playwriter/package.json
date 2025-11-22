@@ -12,7 +12,7 @@
     "watch": "tsc -w",
     "typecheck": "tsc --noEmit",
     "mcp": "vite-node src/mcp.ts",
-    "test": "vitest run",
+    "test": "vitest run -u",
     "test:watch": "vitest"
   },
   "bin": "./bin.js",
