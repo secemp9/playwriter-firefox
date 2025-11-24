@@ -100,6 +100,9 @@ importers:
       '@vitest/ui':
         specifier: ^4.0.8
         version: 4.0.8(vitest@4.0.8)
+      mcp-extension:
+        specifier: workspace:*
+        version: link:../extension
       vite-node:
         specifier: ^5.0.0
         version: 5.0.0(@types/node@24.10.1)(tsx@4.20.6)
