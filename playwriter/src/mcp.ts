@@ -248,8 +248,8 @@ async function resetConnection(): Promise<{ browser: Browser; page: Page; contex
   state.context = null
   state.isConnected = false
   
-  // Clear all browser logs on reset
-  browserLogs.clear()
+  // DO NOT clear browser logs on reset - logs should persist across reconnections
+  // browserLogs.clear()
 
   await ensureRelayServer()
 

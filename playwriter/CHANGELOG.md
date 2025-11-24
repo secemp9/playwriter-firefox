@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.0.10
+
+### Patch Changes
+
+- **Browser console log capture**: Added `getLatestLogs` function to capture and retrieve browser console logs
+  - Automatically captures up to 5000 logs per page
+  - Logs cleared on page reload/navigation
+  - Logs deleted when page is closed
+  - Supports filtering by page, search string/regex, and count limit
+- **Fixed test contamination**: Added `clearAllLogs` function to prevent log persistence across tests
+- **Improved console listener setup**: Made listeners synchronous using page `_guid` for immediate log capture
+- **Critical reconnection test**: Added test verifying extension reconnection after `disconnectEverything()`
+  - Tests full disconnect/reconnect cycle
+  - Verifies MCP client can reconnect with `resetPlaywright()`
+  - Ensures pages are visible after reconnection
+- **Persistent console listeners**: Console logs now persist across browser reconnections (not cleared in `resetConnection`)
+
 ## 0.0.9
 
 ### Patch Changes

@@ -706,6 +706,143 @@ describe('MCP Server Tests', () => {
         await page.close()
     })
 
+    it('should be able to reconnect after disconnecting everything', async () => {
+        if (!browserContext) throw new Error('Browser not initialized')
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        // 1. Use the existing about:blank page from beforeAll
+        const pages = await browserContext.pages()
+        expect(pages.length).toBeGreaterThan(0)
+        const page = pages[0]
+        
+        await page.goto('https://example.com/disconnect-test')
+        await page.waitForLoadState('networkidle')
+        await page.bringToFront()
+        
+        // Enable extension on this page
+        const initialEnable = await serviceWorker.evaluate(async () => {
+            return await globalThis.toggleExtensionForActiveTab()
+        })
+        console.log('Initial enable result:', initialEnable)
+        expect(initialEnable.isConnected).toBe(true)
+        
+        // Wait for extension to fully connect
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+        // Verify MCP can see the page
+        const beforeDisconnect = await client.callTool({
+            name: 'execute',
+            arguments: {
+                code: js`
+          const pages = context.pages();
+          console.log('Pages before disconnect:', pages.length);
+          const testPage = pages.find(p => p.url().includes('disconnect-test'));
+          console.log('Found test page:', !!testPage);
+          return { pagesCount: pages.length, foundTestPage: !!testPage };
+        `,
+            },
+        })
+        
+        const beforeOutput = (beforeDisconnect as any).content[0].text
+        expect(beforeOutput).toContain('foundTestPage')
+        console.log('Before disconnect:', beforeOutput)
+
+        // 2. Disconnect everything
+        console.log('Calling disconnectEverything...')
+        await serviceWorker.evaluate(async () => {
+            await globalThis.disconnectEverything()
+        })
+        
+        // Wait for disconnect to complete
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+        // 3. Verify MCP cannot see the page anymore
+        const afterDisconnect = await client.callTool({
+            name: 'execute',
+            arguments: {
+                code: js`
+          const pages = context.pages();
+          console.log('Pages after disconnect:', pages.length);
+          return { pagesCount: pages.length };
+        `,
+            },
+        })
+        
+        const afterDisconnectOutput = (afterDisconnect as any).content[0].text
+        console.log('After disconnect:', afterDisconnectOutput)
+        expect(afterDisconnectOutput).toContain('Pages after disconnect: 0')
+
+        // 4. Re-enable extension on the same page
+        console.log('Re-enabling extension...')
+        await page.bringToFront()
+        const reconnectResult = await serviceWorker.evaluate(async () => {
+            console.log('About to call toggleExtensionForActiveTab')
+            const result = await globalThis.toggleExtensionForActiveTab()
+            console.log('toggleExtensionForActiveTab result:', result)
+            return result
+        })
+        
+        console.log('Reconnect result:', reconnectResult)
+        expect(reconnectResult.isConnected).toBe(true)
+        
+        // Wait for extension to fully reconnect and relay server to be ready
+        console.log('Waiting for reconnection to stabilize...')
+        await new Promise(resolve => setTimeout(resolve, 1000))
+
+        // 5. Reset the MCP client's playwright connection since it was closed by disconnectEverything
+        console.log('Resetting MCP playwright connection...')
+        const resetResult = await client.callTool({
+            name: 'execute',
+            arguments: {
+                code: js`
+          console.log('Resetting playwright connection');
+          const result = await resetPlaywright();
+          console.log('Reset complete, checking pages');
+          const pages = context.pages();
+          console.log('Pages after reset:', pages.length);
+          return { reset: true, pagesCount: pages.length };
+        `,
+            },
+        })
+        console.log('Reset result:', (resetResult as any).content[0].text)
+
+        // 6. Verify MCP can see the page again
+        console.log('Attempting to access page via MCP...')
+        const afterReconnect = await client.callTool({
+            name: 'execute',
+            arguments: {
+                code: js`
+          console.log('Checking pages after reconnect...');
+          const pages = context.pages();
+          console.log('Pages after reconnect:', pages.length);
+          
+          if (pages.length === 0) {
+            console.log('No pages found!');
+            return { pagesCount: 0, foundTestPage: false };
+          }
+          
+          const testPage = pages.find(p => p.url().includes('disconnect-test'));
+          console.log('Found test page after reconnect:', !!testPage);
+          
+          if (testPage) {
+            console.log('Test page URL:', testPage.url());
+            return { pagesCount: pages.length, foundTestPage: true, url: testPage.url() };
+          }
+          
+          return { pagesCount: pages.length, foundTestPage: false };
+        `,
+            },
+        })
+        
+        const afterReconnectOutput = (afterReconnect as any).content[0].text
+        console.log('After reconnect:', afterReconnectOutput)
+        expect(afterReconnectOutput).toContain('foundTestPage')
+        expect(afterReconnectOutput).toContain('disconnect-test')
+
+        // Clean up - navigate page back to about:blank to not interfere with other tests
+        await page.goto('about:blank')
+    })
+
     it('should capture browser console logs with getLatestLogs', async () => {
         // Ensure clean state and clear any existing logs
         const resetResult = await client.callTool({
