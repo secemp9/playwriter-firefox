@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "playwriter": {
+      "type": "stdio",
+      "command": "tsx",
+      "args": ["/Users/morse/Documents/GitHub/playwriter/playwriter/src/mcp.ts"],
+      "env": {}
+    }
+  }
+}
