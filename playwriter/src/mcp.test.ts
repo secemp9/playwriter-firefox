@@ -678,12 +678,7 @@ describe('MCP Server Tests', () => {
         if (!browserContext) throw new Error('Browser not initialized')
         const serviceWorker = await getExtensionServiceWorker(browserContext)
 
-        // 1. Ensure clean state (disconnected)
-        await serviceWorker.evaluate(async () => {
-            await globalThis.disconnectEverything()
-        })
-
-        // 2. Open page and navigate
+        // 1. Open a new page (extension not yet enabled for it)
         const page = await browserContext.newPage()
         const targetUrl = 'https://example.com/late-enable'
         await page.goto(targetUrl)
@@ -692,12 +687,12 @@ describe('MCP Server Tests', () => {
         // Wait for load
         await page.waitForLoadState('networkidle')
 
-        // 3. Enable extension
+        // 2. Enable extension for this page
         await serviceWorker.evaluate(async () => {
             await globalThis.toggleExtensionForActiveTab()
         })
 
-        // 4. Verify via CDP
+        // 3. Verify via CDP that the correct URL is shown
         const browser = await chromium.connectOverCDP(getCdpUrl())
         // Wait for sync
         await new Promise(r => setTimeout(r, 1000))
@@ -712,6 +707,25 @@ describe('MCP Server Tests', () => {
     })
 
     it('should capture browser console logs with getLatestLogs', async () => {
+        // Ensure clean state and clear any existing logs
+        const resetResult = await client.callTool({
+            name: 'execute',
+            arguments: {
+                code: js`
+          // Clear any existing logs from previous tests
+          clearAllLogs();
+          console.log('Cleared all existing logs');
+          
+          // Verify connection is working
+          const pages = context.pages();
+          console.log('Current pages count:', pages.length);
+          
+          return { success: true, pagesCount: pages.length };
+        `,
+            },
+        })
+        console.log('Cleanup result:', resetResult)
+
         // Create a new page for this test
         await client.callTool({
             name: 'execute',
@@ -844,6 +858,17 @@ describe('MCP Server Tests', () => {
     }, 30000)
 
     it('should keep logs separate between different pages', async () => {
+        // Clear any existing logs from previous tests
+        await client.callTool({
+            name: 'execute',
+            arguments: {
+                code: js`
+          clearAllLogs();
+          console.log('Cleared all existing logs for second log test');
+        `,
+            },
+        })
+
         // Create two pages
         await client.callTool({
             name: 'execute',

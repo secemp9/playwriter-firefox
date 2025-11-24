@@ -58,6 +58,7 @@ interface VMContext {
     count?: number
     searchFilter?: string | RegExp
   }) => Promise<string[]>
+  clearAllLogs: () => void
   require: NodeRequire
   import: (specifier: string) => Promise<any>
 }
@@ -126,7 +127,7 @@ async function ensureConnection(): Promise<{ browser: Browser; page: Page }> {
   const contexts = browser.contexts()
   const context = contexts.length > 0 ? contexts[0] : await browser.newContext()
 
-  // Set up console listener for all pages
+  // Set up console listener for all future pages
   context.on('page', (page) => {
     setupPageConsoleListener(page)
   })
@@ -134,8 +135,8 @@ async function ensureConnection(): Promise<{ browser: Browser; page: Page }> {
   const pages = context.pages()
   const page = pages.length > 0 ? pages[0] : await context.newPage()
   
-  // Set up console listener for existing pages
-  pages.forEach(p => setupPageConsoleListener(p))
+  // Set up console listener for all existing pages (including the one we might have just created)
+  context.pages().forEach(p => setupPageConsoleListener(p))
 
   state.browser = browser
   state.page = page
@@ -146,55 +147,68 @@ async function ensureConnection(): Promise<{ browser: Browser; page: Page }> {
 }
 
 async function getPageTargetId(page: Page): Promise<string> {
+  if (!page) {
+    throw new Error('Page is null or undefined')
+  }
+  
+  // Always use internal _guid for consistency and speed
+  const guid = (page as any)._guid
+  if (guid) {
+    return guid
+  }
+  
   try {
-    // Get CDP session and fetch target info
+    // Fallback to CDP if _guid is not available
     const client = await page.context().newCDPSession(page)
     const { targetInfo } = await client.send('Target.getTargetInfo')
     await client.detach()
     
     return targetInfo.targetId
   } catch (e) {
-    // Fallback to using internal _guid if CDP fails
-    const guid = (page as any)._guid
-    if (guid) {
-      return guid
-    }
-    throw new Error('Could not get page identifier')
+    throw new Error(`Could not get page identifier: ${e}`)
   }
 }
 
 function setupPageConsoleListener(page: Page) {
-  // Get targetId once when setting up the listener
-  getPageTargetId(page).then(targetId => {
-    // Clear logs on navigation/reload
-    page.on('framenavigated', (frame) => {
-      // Only clear if it's the main frame navigating (page reload/navigation)
-      if (frame === page.mainFrame()) {
-        browserLogs.set(targetId, [])
-      }
-    })
+  // Get targetId synchronously using _guid
+  const targetId = (page as any)._guid as string | undefined
+  
+  if (!targetId) {
+    // If no _guid, silently fail - this shouldn't happen in normal operation
+    return
+  }
+  
+  // Initialize logs array for this page
+  if (!browserLogs.has(targetId)) {
+    browserLogs.set(targetId, [])
+  }
+  
+  // Clear logs on navigation/reload
+  page.on('framenavigated', (frame) => {
+    // Only clear if it's the main frame navigating (page reload/navigation)
+    if (frame === page.mainFrame()) {
+      browserLogs.set(targetId, [])
+    }
+  })
+  
+  // Delete logs when page is closed
+  page.on('close', () => {
+    browserLogs.delete(targetId)
+  })
+  
+  page.on('console', (msg) => {
+    const logEntry = `[${msg.type()}] ${msg.text()}`
     
-    // Delete logs when page is closed
-    page.on('close', () => {
-      browserLogs.delete(targetId)
-    })
+    // Get or create logs array for this page targetId
+    if (!browserLogs.has(targetId)) {
+      browserLogs.set(targetId, [])
+    }
+    const pageLogs = browserLogs.get(targetId)!
     
-    page.on('console', (msg) => {
-      const logEntry = `[${msg.type()}] ${msg.text()}`
-      
-      // Get or create logs array for this page targetId
-      if (!browserLogs.has(targetId)) {
-        browserLogs.set(targetId, [])
-      }
-      const pageLogs = browserLogs.get(targetId)!
-      
-      pageLogs.push(logEntry)
-      if (pageLogs.length > MAX_LOGS_PER_PAGE) {
-        pageLogs.shift()
-      }
-    })
-  }).catch(err => {
-    // Silently fail - page might be closed or CDP might not be available
+    pageLogs.push(logEntry)
+    if (pageLogs.length > MAX_LOGS_PER_PAGE) {
+      pageLogs.shift()
+    }
   })
 }
 
@@ -233,6 +247,9 @@ async function resetConnection(): Promise<{ browser: Browser; page: Page; contex
   state.page = null
   state.context = null
   state.isConnected = false
+  
+  // Clear all browser logs on reset
+  browserLogs.clear()
 
   await ensureRelayServer()
 
@@ -242,7 +259,7 @@ async function resetConnection(): Promise<{ browser: Browser; page: Page; contex
   const contexts = browser.contexts()
   const context = contexts.length > 0 ? contexts[0] : await browser.newContext()
 
-  // Set up console listener for all pages
+  // Set up console listener for all future pages
   context.on('page', (page) => {
     setupPageConsoleListener(page)
   })
@@ -250,8 +267,8 @@ async function resetConnection(): Promise<{ browser: Browser; page: Page; contex
   const pages = context.pages()
   const page = pages.length > 0 ? pages[0] : await context.newPage()
   
-  // Set up console listener for existing pages
-  pages.forEach(p => setupPageConsoleListener(p))
+  // Set up console listener for all existing pages (including the one we might have just created)
+  context.pages().forEach(p => setupPageConsoleListener(p))
 
   state.browser = browser
   state.page = page
@@ -421,6 +438,10 @@ server.tool(
         // Return all logs or limited count
         return count !== undefined ? allLogs.slice(-count) : allLogs
       }
+      
+      const clearAllLogs = () => {
+        browserLogs.clear()
+      }
 
       let vmContextObj: VMContextWithGlobals = {
         page,
@@ -430,6 +451,7 @@ server.tool(
         accessibilitySnapshot,
         getLocatorStringForElement,
         getLatestLogs,
+        clearAllLogs,
         resetPlaywright: async () => {
           const { page: newPage, context: newContext } = await resetConnection()
 
@@ -443,6 +465,7 @@ server.tool(
             accessibilitySnapshot,
             getLocatorStringForElement,
             getLatestLogs,
+            clearAllLogs,
             resetPlaywright: vmContextObj.resetPlaywright,
             require,
             import: vmContextObj.import,
