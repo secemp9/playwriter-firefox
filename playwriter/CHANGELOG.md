@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.16
+
+### Patch Changes
+
+- **Fixed Stagehand timeout**: Send `Target.attachedToTarget` event after `Target.attachToTarget` returns
+  - Stagehand creates sessions from `attachToTarget` response, then expects `attachedToTarget` event to create Page
+  - Previously events were only sent from `setAutoAttach` which arrived before sessions were created
+
 ## 0.0.15
 
 ### Patch Changes

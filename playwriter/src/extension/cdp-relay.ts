@@ -351,7 +351,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
             }
           }
 
-          if (method === 'Target.setDiscoverTargets' && (params)?.discover) {
+          if (method === 'Target.setDiscoverTargets' && (params as any)?.discover) {
             for (const target of connectedTargets.values()) {
               const targetCreatedPayload = {
                 method: 'Target.targetCreated',
@@ -365,6 +365,30 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
               logger?.log(chalk.magenta('[Server] Target.targetCreated full payload:'), JSON.stringify(targetCreatedPayload))
               sendToPlaywright({
                 message: targetCreatedPayload,
+                clientId,
+                source: 'server'
+              })
+            }
+          }
+
+          if (method === 'Target.attachToTarget' && result?.sessionId) {
+            const targetId = params?.targetId
+            const target = Array.from(connectedTargets.values()).find(t => t.targetId === targetId)
+            if (target) {
+              const attachedPayload = {
+                method: 'Target.attachedToTarget',
+                params: {
+                  sessionId: result.sessionId,
+                  targetInfo: {
+                    ...target.targetInfo,
+                    attached: true
+                  },
+                  waitingForDebugger: false
+                }
+              } satisfies CDPEventFor<'Target.attachedToTarget'>
+              logger?.log(chalk.magenta('[Server] Target.attachedToTarget (from attachToTarget) payload:'), JSON.stringify(attachedPayload))
+              sendToPlaywright({
+                message: attachedPayload,
                 clientId,
                 source: 'server'
               })

@@ -610,8 +610,8 @@ describe('MCP Server Tests', () => {
         expect(results).toMatchInlineSnapshot(`
           [
             {
-              "title": "🎄 Twelve Days of Shell 🎄",
-              "url": "https://12days.cmdchallenge.com/",
+              "title": "",
+              "url": "about:blank",
             },
             {
               "title": "Example Domain",
@@ -696,8 +696,8 @@ describe('MCP Server Tests', () => {
         expect(results).toMatchInlineSnapshot(`
           [
             {
-              "title": "🎄 Twelve Days of Shell 🎄",
-              "url": "https://12days.cmdchallenge.com/",
+              "title": "",
+              "url": "about:blank",
             },
             {
               "title": "Example Domain",
