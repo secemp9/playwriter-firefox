@@ -58,7 +58,7 @@ IMPORTANT! never call bringToFront unless specifically asked by the user. It is 
 
 after you click a button or submit a form you ALWAYS have to then check what is the current state of the page. you cannot assume what happened after doing an action. instead run the following code to know what happened after the action:
 
-`console.log('url:', page.url()); console.log(await accessibilitySnapshot({ page }).then(x => x.slice(0, 1000)));`
+`console.log('url:', page.url()); console.log(await accessibilitySnapshot({ page }).then(x => x.split('\n').slice(0, 30).join('\n')));`
 
 if nothing happened you may need to wait before the action completes, using something like `page.waitForNavigation({timeout: 3000})` or `await page.waitForLoadState('networkidle', {timeout: 3000})`
 
