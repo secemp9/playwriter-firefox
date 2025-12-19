@@ -94,8 +94,6 @@ const cdpSessionCache: WeakMap<Page, CDPSession> = new WeakMap()
 const RELAY_PORT = 19988
 const NO_TABS_ERROR = `No browser tabs are connected. Please install and enable the Playwriter extension on at least one tab: https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe`
 
-
-
 async function setDeviceScaleFactorForMacOS(context: BrowserContext): Promise<void> {
   if (os.platform() !== 'darwin') {
     return
@@ -113,8 +111,25 @@ async function setDeviceScaleFactorForMacOS(context: BrowserContext): Promise<vo
   }
 }
 
+async function preserveSystemColorScheme(context: BrowserContext): Promise<void> {
+  const options = (context as any)._options
+  if (!options) {
+    return
+  }
+  options.colorScheme = 'no-override'
+  options.reducedMotion = 'no-override'
+  options.forcedColors = 'no-override'
+  await Promise.all(
+    context.pages().map((page) => {
+      return page.emulateMedia({ colorScheme: null, reducedMotion: null, forcedColors: null }).catch(() => {})
+    }),
+  )
+}
+
 function isRegExp(value: any): value is RegExp {
-  return typeof value === 'object' && value !== null && typeof value.test === 'function' && typeof value.exec === 'function'
+  return (
+    typeof value === 'object' && value !== null && typeof value.test === 'function' && typeof value.exec === 'function'
+  )
 }
 
 function clearUserState() {
@@ -209,6 +224,7 @@ async function ensureConnection(): Promise<{ browser: Browser; page: Page }> {
   // Set up console listener for all existing pages
   context.pages().forEach((p) => setupPageConsoleListener(p))
 
+  await preserveSystemColorScheme(context)
   await setDeviceScaleFactorForMacOS(context)
 
   state.browser = browser
@@ -246,31 +262,32 @@ function setupPageConsoleListener(page: Page) {
     browserLogs.set(targetId, [])
   }
 
-  // Clear logs on navigation/reload
   page.on('framenavigated', (frame) => {
-    // Only clear if it's the main frame navigating (page reload/navigation)
     if (frame === page.mainFrame()) {
       browserLogs.set(targetId, [])
     }
   })
 
-  // Delete logs when page is closed
   page.on('close', () => {
     browserLogs.delete(targetId)
   })
 
   page.on('console', (msg) => {
-    const logEntry = `[${msg.type()}] ${msg.text()}`
+    try {
+      let logEntry = `[${msg.type()}] ${msg.text()}`
 
-    // Get or create logs array for this page targetId
-    if (!browserLogs.has(targetId)) {
-      browserLogs.set(targetId, [])
-    }
-    const pageLogs = browserLogs.get(targetId)!
+      if (!browserLogs.has(targetId)) {
+        browserLogs.set(targetId, [])
+      }
+      const pageLogs = browserLogs.get(targetId)!
 
-    pageLogs.push(logEntry)
-    if (pageLogs.length > MAX_LOGS_PER_PAGE) {
-      pageLogs.shift()
+      pageLogs.push(logEntry)
+      if (pageLogs.length > MAX_LOGS_PER_PAGE) {
+        pageLogs.shift()
+      }
+    } catch (e) {
+      console.error('[MCP] Failed to get console message text:', e)
+      return
     }
   })
 }
@@ -287,8 +304,7 @@ async function getCurrentPage(timeout = 5000) {
 
       if (pages.length > 0) {
         const page = pages[0]
-        page.waitForEvent('load', { timeout })
-        await page.emulateMedia({ colorScheme: null })
+        await page.waitForEvent('load', { timeout }).catch(() => {})
         return page
       }
     }
@@ -334,6 +350,7 @@ async function resetConnection(): Promise<{ browser: Browser; page: Page; contex
   // Set up console listener for all existing pages
   context.pages().forEach((p) => setupPageConsoleListener(p))
 
+  await preserveSystemColorScheme(context)
   await setDeviceScaleFactorForMacOS(context)
 
   state.browser = browser
@@ -350,7 +367,9 @@ const server = new McpServer({
   version: '1.0.0',
 })
 
-const promptContent = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'prompt.md'), 'utf-8') + `\n\nfor debugging errors, check relay server logs at: ${LOG_FILE_PATH}`
+const promptContent =
+  fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'prompt.md'), 'utf-8') +
+  `\n\nfor debugging errors, check relay server logs at: ${LOG_FILE_PATH}`
 
 server.tool(
   'execute',
@@ -694,12 +713,13 @@ server.tool(
   },
 )
 
-// Start the server
 async function main() {
   await ensureRelayServer()
   const transport = new StdioServerTransport()
   await server.connect(transport)
-  // console.error('Playwright MCP server running on stdio')
 }
 
-main().catch(console.error)
+main().catch((error) => {
+  console.error('Fatal error starting MCP server:', error)
+  process.exit(1)
+})

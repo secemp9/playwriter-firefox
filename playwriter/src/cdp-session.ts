@@ -18,29 +18,33 @@ export class CDPSession {
   constructor(ws: WebSocket) {
     this.ws = ws
     this.ws.on('message', (data) => {
-      const message = JSON.parse(data.toString()) as CDPResponseBase | CDPEventBase
+      try {
+        const message = JSON.parse(data.toString()) as CDPResponseBase | CDPEventBase
 
-      if ('id' in message) {
-        const response = message as CDPResponseBase
-        const pending = this.pendingRequests.get(response.id)
-        if (pending) {
-          this.pendingRequests.delete(response.id)
-          if (response.error) {
-            pending.reject(new Error(response.error.message))
-          } else {
-            pending.resolve(response.result)
+        if ('id' in message) {
+          const response = message as CDPResponseBase
+          const pending = this.pendingRequests.get(response.id)
+          if (pending) {
+            this.pendingRequests.delete(response.id)
+            if (response.error) {
+              pending.reject(new Error(response.error.message))
+            } else {
+              pending.resolve(response.result)
+            }
           }
-        }
-      } else if ('method' in message) {
-        const event = message as CDPEventBase
-        if (event.sessionId === this.sessionId || !event.sessionId) {
-          const listeners = this.eventListeners.get(event.method)
-          if (listeners) {
-            for (const listener of listeners) {
-              listener(event.params)
+        } else if ('method' in message) {
+          const event = message as CDPEventBase
+          if (event.sessionId === this.sessionId || !event.sessionId) {
+            const listeners = this.eventListeners.get(event.method)
+            if (listeners) {
+              for (const listener of listeners) {
+                listener(event.params)
+              }
             }
           }
         }
+      } catch (e) {
+        console.error('[CDPSession] Message handling error:', e)
       }
     })
   }
@@ -51,7 +55,7 @@ export class CDPSession {
 
   send<K extends keyof ProtocolMapping.Commands>(
     method: K,
-    params?: ProtocolMapping.Commands[K]['paramsType'][0]
+    params?: ProtocolMapping.Commands[K]['paramsType'][0],
   ): Promise<ProtocolMapping.Commands[K]['returnType']> {
     const id = ++this.messageId
     const message: Record<string, unknown> = { id, method, params }
@@ -73,10 +77,16 @@ export class CDPSession {
         reject: (error) => {
           clearTimeout(timeout)
           reject(error)
-        }
+        },
       })
 
-      this.ws.send(JSON.stringify(message))
+      try {
+        this.ws.send(JSON.stringify(message))
+      } catch (error) {
+        clearTimeout(timeout)
+        this.pendingRequests.delete(id)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
     })
   }
 
@@ -92,12 +102,16 @@ export class CDPSession {
   }
 
   detach() {
-    for (const pending of this.pendingRequests.values()) {
-      pending.reject(new Error('CDPSession detached'))
+    try {
+      for (const pending of this.pendingRequests.values()) {
+        pending.reject(new Error('CDPSession detached'))
+      }
+      this.pendingRequests.clear()
+      this.eventListeners.clear()
+      this.ws.close()
+    } catch (e) {
+      console.error('[CDPSession] WebSocket close error:', e)
     }
-    this.pendingRequests.clear()
-    this.eventListeners.clear()
-    this.ws.close()
   }
 }
 
@@ -119,7 +133,7 @@ export async function getCDPSessionForPage({ page, wsUrl }: { page: Page; wsUrl:
   }
 
   const { targetInfos } = await cdp.send('Target.getTargets')
-  const pageTargets = targetInfos.filter(t => t.type === 'page')
+  const pageTargets = targetInfos.filter((t) => t.type === 'page')
 
   if (pageIndex >= pageTargets.length) {
     cdp.detach()
@@ -134,7 +148,7 @@ export async function getCDPSessionForPage({ page, wsUrl }: { page: Page; wsUrl:
 
   const { sessionId } = await cdp.send('Target.attachToTarget', {
     targetId: target.targetId,
-    flatten: true
+    flatten: true,
   })
   cdp.setSessionId(sessionId)
 

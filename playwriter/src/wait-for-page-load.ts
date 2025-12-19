@@ -133,15 +133,26 @@ export async function waitForPageLoad(options: WaitForPageLoadOptions): Promise<
   await new Promise((resolve) => setTimeout(resolve, minWait))
 
   while (Date.now() - startTime < timeout) {
-    const { ready, readyState, pendingRequests } = await checkPageReady()
-    lastReadyState = readyState
-    lastPendingRequests = pendingRequests
+    try {
+      const { ready, readyState, pendingRequests } = await checkPageReady()
+      lastReadyState = readyState
+      lastPendingRequests = pendingRequests
 
-    if (ready) {
+      if (ready) {
+        return {
+          success: true,
+          readyState,
+          pendingRequests: [],
+          waitTimeMs: Date.now() - startTime,
+          timedOut: false,
+        }
+      }
+    } catch (e) {
+      console.error('[waitForPageLoad] page.evaluate failed:', e)
       return {
-        success: true,
-        readyState,
-        pendingRequests: [],
+        success: false,
+        readyState: 'error',
+        pendingRequests: ['page.evaluate failed - page may have closed or navigated'],
         waitTimeMs: Date.now() - startTime,
         timedOut: false,
       }

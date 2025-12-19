@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { xdgData } from 'xdg-basedir'
 
@@ -8,7 +9,8 @@ export function getCdpUrl({ port = 19988, host = '127.0.0.1' }: { port?: number;
 }
 
 export function getDataDir(): string {
-  return path.join(xdgData!, 'playwriter')
+  const dataDir = xdgData || path.join(os.homedir(), '.local', 'share')
+  return path.join(dataDir, 'playwriter')
 }
 
 export function ensureDataDir(): string {

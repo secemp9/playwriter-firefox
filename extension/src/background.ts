@@ -732,7 +732,7 @@ const icons = {
     },
     title: 'Error',
     badgeText: '!',
-    badgeColor: [0, 0, 0, 0] as [number, number, number, number],
+    badgeColor: [220, 38, 38, 255] as [number, number, number, number],
   },
 } as const
 

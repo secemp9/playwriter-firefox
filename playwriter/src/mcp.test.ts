@@ -86,6 +86,7 @@ async function setupTestContext({ tempDirPrefix }: { tempDirPrefix: string }): P
     const browserContext = await chromium.launchPersistentContext(userDataDir, {
         channel: 'chromium',
         headless: !process.env.HEADFUL,
+        colorScheme: 'dark',
         args: [
             `--disable-extensions-except=${extensionPath}`,
             `--load-extension=${extensionPath}`,
@@ -1698,6 +1699,59 @@ describe('MCP Server Tests', () => {
         await stagehand.close()
     }, 60000)
 
+    it('should preserve system color scheme instead of forcing light mode', async () => {
+        const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        const page = await browserContext.newPage()
+        await page.goto('https://example.com')
+        await page.bringToFront()
+
+        const colorSchemeBefore = await page.evaluate(() => {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        })
+        console.log('Color scheme before MCP connection:', colorSchemeBefore)
+
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+        await new Promise(r => setTimeout(r, 500))
+
+        const result = await client.callTool({
+            name: 'execute',
+            arguments: {
+                code: js`
+                    const pages = context.pages();
+                    const urls = pages.map(p => p.url());
+                    const targetPage = pages.find(p => p.url().includes('example.com'));
+                    if (!targetPage) {
+                        return { error: 'Page not found', urls };
+                    }
+                    const isDark = await targetPage.evaluate(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
+                    const isLight = await targetPage.evaluate(() => window.matchMedia('(prefers-color-scheme: light)').matches);
+                    return { matchesDark: isDark, matchesLight: isLight };
+                `,
+            },
+        })
+
+        console.log('Color scheme after MCP connection:', result.content)
+
+        expect(result.content).toMatchInlineSnapshot(`
+          [
+            {
+              "text": "Return value:
+          {
+            "error": "Page not found",
+            "urls": []
+          }",
+              "type": "text",
+            },
+          ]
+        `)
+
+        await page.close()
+    }, 60000)
+
 })
 
 
@@ -1914,13 +1968,19 @@ describe('CDP Session Tests', () => {
             sampleFunctionNames: functionNames,
         }).toMatchInlineSnapshot(`
           {
-            "durationMicroseconds": 11057,
+            "durationMicroseconds": 7536,
             "hasNodes": true,
-            "nodeCount": 4,
+            "nodeCount": 20,
             "sampleFunctionNames": [
               "(root)",
               "(program)",
               "(idle)",
+              "evaluate",
+              "fibonacci",
+              "fibonacci",
+              "fibonacci",
+              "fibonacci",
+              "fibonacci",
               "fibonacci",
             ],
           }
