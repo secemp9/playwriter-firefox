@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.21
+
+### Patch Changes
+
+- **Improved debug message clarity**: Changed log file path hint to specify "internal playwriter errors" for better guidance
+
 ## 0.0.20
 
 ### Patch Changes
