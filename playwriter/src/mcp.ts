@@ -213,7 +213,8 @@ async function ensureRelayServer(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 500))
     const newVersion = await getServerVersion(RELAY_PORT)
     if (newVersion === VERSION) {
-      console.error('CDP relay server started successfully')
+      console.error('CDP relay server started successfully, waiting for extension to connect...')
+      await new Promise((resolve) => setTimeout(resolve, 3000))
       return
     }
   }

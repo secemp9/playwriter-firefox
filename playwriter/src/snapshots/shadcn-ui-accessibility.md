@@ -69,76 +69,76 @@ Return value:
             - generic [ref=e50]: Theme
             - combobox "Theme" [ref=e51]:
               - generic [ref=e52]: "Theme:"
+              - generic: Neutral
               - img
-            - combobox [ref=e53]
-            - button "Copy Code" [ref=e54]:
+            - button "Copy Code" [ref=e53]:
               - img
-              - generic [ref=e55]: Copy Code
-        - generic [ref=e59]:
-          - generic [ref=e63]:
-            - group "Payment Method" [ref=e64]:
-              - generic [ref=e65]: Payment Method
-              - paragraph [ref=e66]: All transactions are secure and encrypted
-              - generic [ref=e67]:
-                - group [ref=e68]:
-                  - generic [ref=e69]: Name on Card
-                  - textbox "Name on Card" [ref=e70]:
+              - generic [ref=e54]: Copy Code
+        - generic [ref=e58]:
+          - generic [ref=e62]:
+            - group "Payment Method" [ref=e63]:
+              - generic [ref=e64]: Payment Method
+              - paragraph [ref=e65]: All transactions are secure and encrypted
+              - generic [ref=e66]:
+                - group [ref=e67]:
+                  - generic [ref=e68]: Name on Card
+                  - textbox "Name on Card" [ref=e69]:
                     - /placeholder: John Doe
-                - generic [ref=e71]:
-                  - group [ref=e72]:
-                    - generic [ref=e73]: Card Number
-                    - textbox "Card Number" [ref=e74]:
+                - generic [ref=e70]:
+                  - group [ref=e71]:
+                    - generic [ref=e72]: Card Number
+                    - textbox "Card Number" [ref=e73]:
                       - /placeholder: 1234 5678 9012 3456
-                    - paragraph [ref=e75]: Enter your 16-digit number.
-                  - group [ref=e76]:
-                    - generic [ref=e77]: CVV
-                    - textbox "CVV" [ref=e78]:
+                    - paragraph [ref=e74]: Enter your 16-digit number.
+                  - group [ref=e75]:
+                    - generic [ref=e76]: CVV
+                    - textbox "CVV" [ref=e77]:
                       - /placeholder: "123"
-                - generic [ref=e79]:
-                  - group [ref=e80]:
-                    - generic [ref=e81]: Month
-                    - combobox "Month" [ref=e82]:
+                - generic [ref=e78]:
+                  - group [ref=e79]:
+                    - generic [ref=e80]: Month
+                    - combobox "Month" [ref=e81]:
                       - generic: MM
                       - img
-                    - combobox [ref=e83]
-                  - group [ref=e84]:
-                    - generic [ref=e85]: Year
-                    - combobox "Year" [ref=e86]:
+                    - combobox [ref=e82]
+                  - group [ref=e83]:
+                    - generic [ref=e84]: Year
+                    - combobox "Year" [ref=e85]:
                       - generic: YYYY
                       - img
-                    - combobox [ref=e87]
-            - group "Billing Address" [ref=e89]:
-              - generic [ref=e90]: Billing Address
-              - paragraph [ref=e91]: The billing address associated with your payment method
-              - group [ref=e93]:
-                - checkbox "Same as shipping address" [checked] [ref=e94]:
+                    - combobox [ref=e86]
+            - group "Billing Address" [ref=e88]:
+              - generic [ref=e89]: Billing Address
+              - paragraph [ref=e90]: The billing address associated with your payment method
+              - group [ref=e92]:
+                - checkbox "Same as shipping address" [checked] [ref=e93]:
                   - generic:
                     - img
                 - checkbox [checked]
-                - generic [ref=e95]: Same as shipping address
-            - group [ref=e97]:
-              - group [ref=e99]:
-                - generic [ref=e100]: Comments
-                - textbox "Comments" [ref=e101]:
+                - generic [ref=e94]: Same as shipping address
+            - group [ref=e96]:
+              - group [ref=e98]:
+                - generic [ref=e99]: Comments
+                - textbox "Comments" [ref=e100]:
                   - /placeholder: Add any additional comments
-            - group [ref=e102]:
-              - button "Submit" [ref=e103]
-              - button "Cancel" [ref=e104]
-          - generic [ref=e105]:
-            - generic [ref=e106]:
-              - generic [ref=e107]:
-                - generic [ref=e109]:
-                  - generic [ref=e111]: CN
-                  - generic [ref=e113]: LR
-                  - generic [ref=e115]: ER
-                - generic [ref=e116]: No Team Members
-                - generic [ref=e117]: Invite your team to collaborate on this project.
-              - button "Invite Members" [ref=e119]:
+            - group [ref=e101]:
+              - button "Submit" [ref=e102]
+              - button "Cancel" [ref=e103]
+          - generic [ref=e104]:
+            - generic [ref=e105]:
+              - generic [ref=e106]:
+                - generic [ref=e108]:
+                  - img "@shadcn" [ref=e110]
+                  - img "@maxleiter" [ref=e112]
+                  - img "@evilrabbit" [ref=e114]
+                - generic [ref=e115]: No Team Members
+                - generic [ref=e116]: Invite your team to collaborate on this project.
+              - button "Invite Members" [ref=e118]:
                 - img
                 - text: Invite Members
-            - generic [ref=e120]:
-              - generic [ref=e121]:
+            - generic [ref=e119]:
+              - generic [ref=e120]:
                 - status "Loading"
-                - tex
+         
 
 [Truncated to 6000 characters. Better manage your logs or paginate them to read the full logs]

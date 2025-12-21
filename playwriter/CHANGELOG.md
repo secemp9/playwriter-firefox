@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.25
+
+### Patch Changes
+
+- **Wait for extension after server start**: When MCP starts the relay server, wait 3 seconds for the extension to connect before proceeding
+
 ## 0.0.24
 
 ### Patch Changes
