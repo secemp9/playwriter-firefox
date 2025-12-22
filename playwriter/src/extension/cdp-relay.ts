@@ -544,6 +544,23 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
               } as CDPEventBase,
               source: 'extension'
             })
+          } else if (method === 'Target.targetCrashed') {
+            const crashParams = params as Protocol.Target.TargetCrashedEvent
+            for (const [sid, target] of connectedTargets.entries()) {
+              if (target.targetId === crashParams.targetId) {
+                connectedTargets.delete(sid)
+                logger?.log(chalk.red('[Server] Target crashed, removing:'), crashParams.targetId)
+                break
+              }
+            }
+
+            sendToPlaywright({
+              message: {
+                method: 'Target.targetCrashed',
+                params: crashParams
+              } as CDPEventBase,
+              source: 'extension'
+            })
           } else if (method === 'Target.targetInfoChanged') {
             const infoParams = params as Protocol.Target.TargetInfoChangedEvent
             for (const target of connectedTargets.values()) {
@@ -557,6 +574,49 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
               message: {
                 method: 'Target.targetInfoChanged',
                 params: infoParams
+              } as CDPEventBase,
+              source: 'extension'
+            })
+          } else if (method === 'Page.frameNavigated') {
+            const frameParams = params as Protocol.Page.FrameNavigatedEvent
+            if (!frameParams.frame.parentId && sessionId) {
+              const target = connectedTargets.get(sessionId)
+              if (target) {
+                target.targetInfo = {
+                  ...target.targetInfo,
+                  url: frameParams.frame.url,
+                  title: frameParams.frame.name || target.targetInfo.title,
+                }
+                logger?.log(chalk.magenta('[Server] Updated target URL from Page.frameNavigated:'), frameParams.frame.url)
+              }
+            }
+
+            sendToPlaywright({
+              message: {
+                sessionId,
+                method,
+                params
+              } as CDPEventBase,
+              source: 'extension'
+            })
+          } else if (method === 'Page.navigatedWithinDocument') {
+            const navParams = params as Protocol.Page.NavigatedWithinDocumentEvent
+            if (sessionId) {
+              const target = connectedTargets.get(sessionId)
+              if (target) {
+                target.targetInfo = {
+                  ...target.targetInfo,
+                  url: navParams.url,
+                }
+                logger?.log(chalk.magenta('[Server] Updated target URL from Page.navigatedWithinDocument:'), navParams.url)
+              }
+            }
+
+            sendToPlaywright({
+              message: {
+                sessionId,
+                method,
+                params
               } as CDPEventBase,
               source: 'extension'
             })

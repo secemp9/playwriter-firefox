@@ -101,7 +101,7 @@ export class CDPSession {
     this.eventListeners.get(event)?.delete(callback as (params: unknown) => void)
   }
 
-  detach() {
+  close() {
     try {
       for (const pending of this.pendingRequests.values()) {
         pending.reject(new Error('CDPSession detached'))
@@ -128,7 +128,7 @@ export async function getCDPSessionForPage({ page, wsUrl }: { page: Page; wsUrl:
   const pages = page.context().pages()
   const pageIndex = pages.indexOf(page)
   if (pageIndex === -1) {
-    cdp.detach()
+    cdp.close()
     throw new Error('Page not found in context')
   }
 
@@ -136,13 +136,13 @@ export async function getCDPSessionForPage({ page, wsUrl }: { page: Page; wsUrl:
   const pageTargets = targetInfos.filter((t) => t.type === 'page')
 
   if (pageIndex >= pageTargets.length) {
-    cdp.detach()
+    cdp.close()
     throw new Error(`Page index ${pageIndex} out of bounds (${pageTargets.length} targets)`)
   }
 
   const target = pageTargets[pageIndex]
   if (target.url !== page.url()) {
-    cdp.detach()
+    cdp.close()
     throw new Error(`URL mismatch: page has "${page.url()}" but target has "${target.url}"`)
   }
 

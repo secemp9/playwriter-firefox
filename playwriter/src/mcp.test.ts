@@ -1606,7 +1606,7 @@ describe('MCP Server Tests', () => {
         console.log('window.devicePixelRatio:', windowDpr)
         expect(windowDpr).toBe(1)
 
-        cdpSession.detach()
+        cdpSession.close()
         await browser.close()
         await page.close()
     }, 60000)
@@ -1636,7 +1636,7 @@ describe('MCP Server Tests', () => {
         expect(layoutMetrics.cssVisualViewport).toBeDefined()
         expect(layoutMetrics.cssVisualViewport.clientWidth).toBeGreaterThan(0)
 
-        client.detach()
+        client.close()
         await browser.close()
         await page.close()
     }, 60000)
@@ -1764,6 +1764,12 @@ describe('CDP Session Tests', () => {
 
     beforeAll(async () => {
         testCtx = await setupTestContext({ tempDirPrefix: 'pw-cdp-test-' })
+        
+        const serviceWorker = await getExtensionServiceWorker(testCtx.browserContext)
+        await serviceWorker.evaluate(async () => {
+            await globalThis.disconnectEverything()
+        })
+        await new Promise(r => setTimeout(r, 500))
     }, 600000)
 
     afterAll(async () => {
@@ -1907,7 +1913,7 @@ describe('CDP Session Tests', () => {
 
         await cdpSession.send('Debugger.resume')
         await cdpSession.send('Debugger.disable')
-        cdpSession.detach()
+        cdpSession.close()
         await browser.close()
         await page.close()
     }, 60000)
@@ -1964,21 +1970,179 @@ describe('CDP Session Tests', () => {
             sampleFunctionNames: functionNames,
         }).toMatchInlineSnapshot(`
           {
-            "durationMicroseconds": 6962,
+            "durationMicroseconds": 9014,
             "hasNodes": true,
-            "nodeCount": 8,
+            "nodeCount": 20,
             "sampleFunctionNames": [
               "(root)",
               "(program)",
               "(idle)",
               "evaluate",
-              "querySelectorAll",
+              "fibonacci",
+              "fibonacci",
+              "fibonacci",
+              "fibonacci",
+              "fibonacci",
+              "fibonacci",
             ],
           }
         `)
 
         await cdpSession.send('Profiler.disable')
-        cdpSession.detach()
+        cdpSession.close()
+        await browser.close()
+        await page.close()
+    }, 60000)
+
+    it('should update Target.getTargets URL after page navigation', async () => {
+        const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        const page = await browserContext.newPage()
+        await page.goto('https://example.com/')
+        await page.bringToFront()
+
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+        await new Promise(r => setTimeout(r, 500))
+
+        const browser = await chromium.connectOverCDP(getCdpUrl())
+        const cdpPage = browser.contexts()[0].pages().find(p => p.url().includes('example.com'))
+        expect(cdpPage).toBeDefined()
+
+        const wsUrl = getCdpUrl()
+        const cdpSession = await getCDPSessionForPage({ page: cdpPage!, wsUrl })
+
+        const initialTargets = await cdpSession.send('Target.getTargets')
+        const initialPageTarget = initialTargets.targetInfos.find(t => t.type === 'page' && t.url.includes('example.com'))
+        expect(initialPageTarget?.url).toBe('https://example.com/')
+
+        await cdpPage!.goto('https://news.ycombinator.com/', { waitUntil: 'networkidle' })
+        await new Promise(r => setTimeout(r, 500))
+
+        const afterNavTargets = await cdpSession.send('Target.getTargets')
+        const allPageTargets = afterNavTargets.targetInfos.filter(t => t.type === 'page')
+        
+        const aboutBlankTargets = allPageTargets.filter(t => t.url === 'about:blank')
+        expect(aboutBlankTargets).toHaveLength(0)
+        
+        const exampleComTargets = allPageTargets.filter(t => t.url.includes('example.com'))
+        expect(exampleComTargets).toHaveLength(0)
+
+        const hnTargets = allPageTargets.filter(t => t.url.includes('news.ycombinator.com'))
+        expect(hnTargets).toHaveLength(1)
+
+        cdpSession.close()
+        await browser.close()
+        await page.close()
+    }, 60000)
+
+    it('should return correct targets for multiple pages via Target.getTargets', async () => {
+        const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        const page1 = await browserContext.newPage()
+        await page1.goto('https://example.com/')
+        await page1.bringToFront()
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+
+        const page2 = await browserContext.newPage()
+        await page2.goto('https://news.ycombinator.com/')
+        await page2.bringToFront()
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+
+        await new Promise(r => setTimeout(r, 500))
+
+        const browser = await chromium.connectOverCDP(getCdpUrl())
+        const cdpPage = browser.contexts()[0].pages().find(p => p.url().includes('example.com'))
+        expect(cdpPage).toBeDefined()
+
+        const wsUrl = getCdpUrl()
+        const cdpSession = await getCDPSessionForPage({ page: cdpPage!, wsUrl })
+
+        const { targetInfos } = await cdpSession.send('Target.getTargets')
+        const allPageTargets = targetInfos.filter(t => t.type === 'page')
+        
+        const aboutBlankTargets = allPageTargets.filter(t => t.url === 'about:blank')
+        expect(aboutBlankTargets).toHaveLength(0)
+        
+        const pageTargets = allPageTargets
+            .map(t => ({ type: t.type, url: t.url }))
+            .sort((a, b) => a.url.localeCompare(b.url))
+
+        expect(pageTargets).toMatchInlineSnapshot(`
+          [
+            {
+              "type": "page",
+              "url": "https://example.com/",
+            },
+            {
+              "type": "page",
+              "url": "https://news.ycombinator.com/",
+            },
+          ]
+        `)
+
+        cdpSession.close()
+        await browser.close()
+        await page1.close()
+        await page2.close()
+    }, 60000)
+
+    it('should maintain CDP session functionality after page URL change', async () => {
+        const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        const page = await browserContext.newPage()
+        const initialUrl = 'https://example.com/'
+        await page.goto(initialUrl)
+        await page.bringToFront()
+
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+        await new Promise(r => setTimeout(r, 500))
+
+        const browser = await chromium.connectOverCDP(getCdpUrl())
+        const cdpPage = browser.contexts()[0].pages().find(p => p.url().includes('example.com'))
+        expect(cdpPage).toBeDefined()
+
+        const wsUrl = getCdpUrl()
+        const cdpSession = await getCDPSessionForPage({ page: cdpPage!, wsUrl })
+
+        const initialEvalResult = await cdpSession.send('Runtime.evaluate', {
+            expression: 'document.title',
+            returnByValue: true,
+        })
+        expect(initialEvalResult.result.value).toBe('Example Domain')
+
+        const newUrl = 'https://news.ycombinator.com/'
+        await cdpPage!.goto(newUrl, { waitUntil: 'networkidle' })
+
+        expect(cdpPage!.url()).toBe(newUrl)
+
+        const layoutMetrics = await cdpSession.send('Page.getLayoutMetrics')
+        expect(layoutMetrics.cssVisualViewport).toBeDefined()
+        expect(layoutMetrics.cssVisualViewport.clientWidth).toBeGreaterThan(0)
+
+        const afterNavEvalResult = await cdpSession.send('Runtime.evaluate', {
+            expression: 'document.title',
+            returnByValue: true,
+        })
+        expect(afterNavEvalResult.result.value).toContain('Hacker News')
+
+        const locationResult = await cdpSession.send('Runtime.evaluate', {
+            expression: 'window.location.href',
+            returnByValue: true,
+        })
+        expect(locationResult.result.value).toBe(newUrl)
+
+        cdpSession.close()
         await browser.close()
         await page.close()
     }, 60000)
