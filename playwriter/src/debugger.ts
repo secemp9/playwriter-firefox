@@ -86,7 +86,7 @@ export class Debugger {
     })
 
     this.cdp.on('Debugger.scriptParsed', (params) => {
-      if (params.url && params.url.endsWith('.js')) {
+      if (params.url && !params.url.startsWith('chrome') && !params.url.startsWith('devtools')) {
         this.scripts.set(params.scriptId, {
           scriptId: params.scriptId,
           url: params.url,
@@ -468,8 +468,9 @@ export class Debugger {
   }
 
   /**
-   * Lists available .js scripts where breakpoints can be set.
+   * Lists available scripts where breakpoints can be set.
    * Scripts are collected from Debugger.scriptParsed events after enable() is called.
+   * Reload the page after enabling to capture all scripts.
    *
    * @param options - Options
    * @param options.search - Optional string to filter scripts by URL (case-insensitive)
@@ -479,11 +480,11 @@ export class Debugger {
    * ```ts
    * // List all scripts
    * const scripts = dbg.listScripts()
-   * // [{ scriptId: '1', url: 'file:///app/index.js' }, ...]
+   * // [{ scriptId: '1', url: 'https://example.com/app.js' }, ...]
    *
    * // Search for specific files
    * const handlers = dbg.listScripts({ search: 'handler' })
-   * // [{ scriptId: '5', url: 'file:///app/src/handlers.js' }]
+   * // [{ scriptId: '5', url: 'https://example.com/handlers.js' }]
    * ```
    */
   listScripts({ search }: { search?: string } = {}): ScriptInfo[] {
