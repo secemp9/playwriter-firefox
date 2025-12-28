@@ -964,3 +964,6 @@ chrome.action.onClicked.addListener(onActionClicked)
 chrome.tabs.onUpdated.addListener(() => {
   void updateIcons()
 })
+
+// Sync icons on first load
+void updateIcons()
