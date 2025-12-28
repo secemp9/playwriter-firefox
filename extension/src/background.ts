@@ -507,7 +507,15 @@ function handleConnectionClose(reason: string, code: number): void {
     return
   }
 
-  store.setState({ connectionState: 'disconnected', errorText: undefined })
+  store.setState((state) => {
+    const newTabs = new Map(state.tabs)
+    for (const [tabId, tab] of newTabs) {
+      if (tab.state === 'connected') {
+        newTabs.set(tabId, { ...tab, state: 'connecting' })
+      }
+    }
+    return { tabs: newTabs, connectionState: 'disconnected', errorText: undefined }
+  })
 
   if (tabs.size > 0) {
     logger.debug('Tabs still connected, triggering reconnection')
