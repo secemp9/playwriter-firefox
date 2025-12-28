@@ -139,6 +139,25 @@ you have access to some functions in addition to playwright methods:
       // search only in CSS files
       const cssMatches = await editor.grep({ regex: /background-color/, pattern: /\.css/ });
       ```
+- `getStylesForLocator({ locator, includeUserAgentStyles? })`: gets the CSS styles applied to an element, similar to browser DevTools "Styles" panel.
+    - `locator`: a Playwright Locator for the element to inspect
+    - `includeUserAgentStyles`: (optional, default: false) include browser default styles
+    - Returns: `StylesResult` object with:
+      - `element`: string description of the element (e.g. `div#main.container`)
+      - `inlineStyle`: object of `{ property: value }` inline styles, or null
+      - `rules`: array of CSS rules that apply to this element, each with:
+        - `selector`: the CSS selector that matched
+        - `source`: `{ url, line, column }` location in the stylesheet, or null
+        - `origin`: `"regular"` | `"user-agent"` | `"injected"` | `"inspector"`
+        - `declarations`: object of `{ property: value }` (values include `!important` if applicable)
+        - `inheritedFrom`: element description if inherited (e.g. `body`), or null for direct matches
+    - Example:
+      ```js
+      const loc = page.locator('.my-button');
+      const styles = await getStylesForLocator({ locator: loc });
+      console.log(formatStylesAsText(styles));
+      ```
+- `formatStylesAsText(styles)`: formats a `StylesResult` object as human-readable text. Use this to display styles in a readable format.
 
 example:
 
@@ -182,6 +201,16 @@ console.log(selector);
 // use the selector programmatically with eval:
 const stableLocator = page.getByRole('button', { name: 'Save' })
 await stableLocator.click();
+```
+
+## pinned elements (user right-click to pin)
+
+Users can right-click an element and select "Pin to Playwriter" to store it in `globalThis.playwriterPinnedElem1` (increments for each pin). The variable name is copied to clipboard.
+
+```js
+const el = await page.evaluateHandle(() => globalThis.playwriterPinnedElem1);
+await el.click();
+const selector = await getLocatorStringForElement(el);
 ```
 
 ## finding specific elements with snapshot

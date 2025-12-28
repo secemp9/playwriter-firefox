@@ -368,6 +368,17 @@ async function attachTab(tabId: number): Promise<Protocol.Target.TargetInfo> {
 
   await chrome.debugger.sendCommand(debuggee, 'Page.enable')
 
+  await chrome.debugger.sendCommand(debuggee, 'Runtime.evaluate', {
+    expression: `
+      if (!window.__playwriter_contextmenu_listener) {
+        window.__playwriter_contextmenu_listener = true;
+        document.addEventListener('contextmenu', (e) => {
+          window.__playwriter_lastRightClicked = e.target;
+        }, true);
+      }
+    `,
+  })
+
   const result = (await chrome.debugger.sendCommand(
     debuggee,
     'Target.getTargetInfo',
@@ -935,6 +946,19 @@ async function onActionClicked(tab: chrome.tabs.Tab): Promise<void> {
 
 resetDebugger()
 
+chrome.contextMenus.create({
+  id: 'playwriter-pin-element',
+  title: 'Pin to Playwriter',
+  contexts: ['all'],
+  visible: false,
+})
+
+function updateContextMenuVisibility(): void {
+  const { currentTabId, tabs } = store.getState()
+  const isConnected = currentTabId !== undefined && tabs.get(currentTabId)?.state === 'connected'
+  chrome.contextMenus.update('playwriter-pin-element', { visible: isConnected })
+}
+
 chrome.runtime.onInstalled.addListener((details) => {
   if (import.meta.env.TESTING) return
   if (details.reason === 'install') {
@@ -949,6 +973,7 @@ function serializeTabs(tabs: Map<number, TabInfo>): string {
 store.subscribe((state, prevState) => {
   logger.log(state)
   void updateIcons()
+  updateContextMenuVisibility()
   const tabsChanged = serializeTabs(state.tabs) !== serializeTabs(prevState.tabs)
   if (tabsChanged) {
     syncTabGroupQueue = syncTabGroupQueue.then(syncTabGroup).catch((e) => {
@@ -963,6 +988,67 @@ chrome.tabs.onActivated.addListener(onTabActivated)
 chrome.action.onClicked.addListener(onActionClicked)
 chrome.tabs.onUpdated.addListener(() => {
   void updateIcons()
+})
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== 'playwriter-pin-element' || !tab?.id) return
+
+  const tabInfo = store.getState().tabs.get(tab.id)
+  if (!tabInfo || tabInfo.state !== 'connected') {
+    logger.debug('Tab not connected, ignoring')
+    return
+  }
+
+  const debuggee = { tabId: tab.id }
+  const count = (tabInfo.pinnedCount || 0) + 1
+
+  store.setState((state) => {
+    const newTabs = new Map(state.tabs)
+    const existing = newTabs.get(tab.id!)
+    if (existing) {
+      newTabs.set(tab.id!, { ...existing, pinnedCount: count })
+    }
+    return { tabs: newTabs }
+  })
+
+  const name = `playwriterPinnedElem${count}`
+
+  try {
+    const result = (await chrome.debugger.sendCommand(debuggee, 'Runtime.evaluate', {
+      expression: `
+        if (window.__playwriter_lastRightClicked) {
+          window.${name} = window.__playwriter_lastRightClicked;
+          '${name}';
+        } else {
+          throw new Error('No element was right-clicked');
+        }
+      `,
+      returnByValue: true,
+    })) as { result?: { value?: string }; exceptionDetails?: { text: string } }
+
+    if (result.exceptionDetails) {
+      logger.error('Failed to pin element:', result.exceptionDetails.text)
+      return
+    }
+
+    await chrome.debugger.sendCommand(debuggee, 'Runtime.evaluate', {
+      expression: `
+        (() => {
+          const el = window.${name};
+          if (!el) return;
+          const orig = el.getAttribute('style') || '';
+          el.setAttribute('style', orig + '; outline: 3px solid #22c55e !important; outline-offset: 2px !important; box-shadow: 0 0 0 3px #22c55e !important;');
+          setTimeout(() => el.setAttribute('style', orig), 300);
+          return navigator.clipboard.writeText('globalThis.${name}');
+        })()
+      `,
+      awaitPromise: true,
+    })
+
+    logger.debug('Pinned element as:', name)
+  } catch (error: any) {
+    logger.error('Failed to pin element:', error.message)
+  }
 })
 
 // Sync icons on first load
