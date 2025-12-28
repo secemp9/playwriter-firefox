@@ -106,6 +106,8 @@ function sendMessage(message: any): void {
 
 async function syncTabGroup(): Promise<void> {
   try {
+    // Only tabs with state 'connected' are in the group.
+    // Tabs in 'connecting' or 'error' state are removed from the group.
     const connectedTabIds = Array.from(store.getState().tabs.entries())
       .filter(([_, info]) => info.state === 'connected')
       .map(([tabId]) => tabId)
@@ -511,11 +513,18 @@ function handleConnectionClose(reason: string, code: number): void {
     return
   }
 
-  store.setState({ connectionState: 'disconnected', errorText: undefined })
-
   if (tabs.size > 0) {
     logger.debug('Tabs still connected, triggering reconnection')
+    store.setState((state) => {
+      const newTabs = new Map(state.tabs)
+      for (const [tabId, tab] of newTabs) {
+        newTabs.set(tabId, { ...tab, state: 'connecting' })
+      }
+      return { tabs: newTabs }
+    })
     void reconnect()
+  } else {
+    store.setState({ connectionState: 'disconnected', errorText: undefined })
   }
 }
 
@@ -657,6 +666,7 @@ async function disconnectTab(tabId: number): Promise<void> {
 
 async function reconnect(): Promise<void> {
   logger.debug('Starting reconnection')
+  store.setState({ connectionState: 'reconnecting', errorText: undefined })
   const { tabs } = store.getState()
   const tabsToReconnect = Array.from(tabs.keys())
   logger.debug('Tabs to reconnect:', tabsToReconnect)
@@ -751,6 +761,8 @@ async function resetDebugger(): Promise<void> {
   }
 }
 
+// undefined URL is for about:blank pages (not restricted) and chrome:// URLs (restricted).
+// We can't distinguish them without the `tabs` permission, so we just let attachment fail.
 function isRestrictedUrl(url: string | undefined): boolean {
   if (!url) return false
   const restrictedPrefixes = ['chrome://', 'chrome-extension://', 'devtools://', 'edge://']
@@ -831,11 +843,11 @@ async function updateIcons(): Promise<void> {
 
     const iconConfig = (() => {
       if (connectionState === 'error') return icons.error
+      if (tabId !== undefined && isRestrictedUrl(tabUrl)) return icons.restricted
       if (connectionState === 'reconnecting') return icons.connecting
       if (tabInfo?.state === 'error') return icons.error
       if (tabInfo?.state === 'connecting') return icons.connecting
       if (tabInfo?.state === 'connected') return icons.connected
-      if (tabId !== undefined && isRestrictedUrl(tabUrl)) return icons.restricted
       return icons.disconnected
     })()
 
