@@ -1,13 +1,13 @@
 {
   "name": "playwriter",
   "description": "",
-  "version": "0.0.27",
+  "version": "0.0.28",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "repository": "https://github.com/remorses/playwriter",
   "scripts": {
-    "build": "rm -rf dist *.tsbuildinfo && mkdir dist && cp src/resource.md src/prompt.md src/debugger-examples.ts dist/ && vite-node scripts/download-selector-generator.ts && tsc",
+    "build": "rm -rf dist *.tsbuildinfo && mkdir dist && cp src/resource.md src/prompt.md src/debugger-examples.ts dist/ && bun scripts/build-selector-generator.ts && bun scripts/build-bippy.ts && tsc",
     "prepublishOnly": "pnpm build",
     "watch": "tsc -w",
     "typecheck": "tsc --noEmit",
@@ -32,6 +32,7 @@
     "@types/node": "^24.10.1",
     "@types/ws": "^8.18.1",
     "@vitest/ui": "^4.0.8",
+    "bippy": "^0.5.27",
     "image-size": "^2.0.2",
     "mcp-extension": "workspace:*",
     "vite-node": "^5.0.0",

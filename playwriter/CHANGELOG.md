@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.28
+
+### Patch Changes
+
+- **Added `getReactSource` utility**: Extract React component source location (file, line, column) from DOM elements
+  - Uses bippy library for React fiber introspection
+  - Returns `{ fileName, lineNumber, columnNumber, componentName }` or `null`
+  - Only works on local dev servers (Vite, Next.js, CRA) with JSX transform in development mode
+- **CSP bypass for script injection**: Changed `getLocatorStringForElement` and `getReactSource` to use CDP `Runtime.evaluate` instead of `addScriptTag`
+  - Scripts now work on pages with strict Content Security Policy
+- **Switched to Bun.build**: Replaced esbuild and esm.sh downloads with Bun.build for bundling selector-generator and bippy
+  - New `build-selector-generator.ts` and `build-bippy.ts` scripts
+
 ## 0.0.27
 
 ### Patch Changes

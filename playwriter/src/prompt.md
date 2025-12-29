@@ -158,6 +158,19 @@ you have access to some functions in addition to playwright methods:
       console.log(formatStylesAsText(styles));
       ```
 - `formatStylesAsText(styles)`: formats a `StylesResult` object as human-readable text. Use this to display styles in a readable format.
+- `getReactSource({ locator })`: gets the React component source location (file, line, column) for an element.
+    - `locator`: a Playwright Locator or ElementHandle for the element to inspect
+    - Returns: `{ fileName, lineNumber, columnNumber, componentName }` or `null` if not found
+    - **Important**: Only works on **local dev servers** (localhost with Vite, Next.js, CRA in dev mode). Production builds strip source info. The JSX transform must have `development: true` to include `_debugSource`.
+    - Example:
+      ```js
+      const loc = page.locator('.my-component');
+      const source = await getReactSource({ locator: loc });
+      if (source) {
+        console.log(`Component: ${source.componentName}`);
+        console.log(`File: ${source.fileName}:${source.lineNumber}:${source.columnNumber}`);
+      }
+      ```
 
 example:
 

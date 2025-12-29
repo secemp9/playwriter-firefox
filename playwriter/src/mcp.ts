@@ -19,6 +19,7 @@ import { getCDPSessionForPage, CDPSession } from './cdp-session.js'
 import { Debugger } from './debugger.js'
 import { Editor } from './editor.js'
 import { getStylesForLocator, formatStylesAsText, type StylesResult } from './styles.js'
+import { getReactSource, type ReactSourceLocation } from './react-source.js'
 
 class CodeExecutionTimeoutError extends Error {
   constructor(timeout: number) {
@@ -80,6 +81,7 @@ interface VMContext {
   createEditor: (options: { cdp: CDPSession }) => Editor
   getStylesForLocator: (options: { locator: any }) => Promise<StylesResult>
   formatStylesAsText: (styles: StylesResult) => string
+  getReactSource: (options: { locator: any }) => Promise<ReactSourceLocation | null>
   require: NodeRequire
   import: (specifier: string) => Promise<any>
 }
@@ -641,7 +643,8 @@ server.tool(
           const currentDir = path.dirname(fileURLToPath(import.meta.url))
           const scriptPath = path.join(currentDir, '..', 'dist', 'selector-generator.js')
           const scriptContent = fs.readFileSync(scriptPath, 'utf-8')
-          await elementPage.addScriptTag({ content: scriptContent })
+          const cdp = await getCDPSession({ page: elementPage })
+          await cdp.send('Runtime.evaluate', { expression: scriptContent })
         }
 
         return await element.evaluate((el: any) => {
@@ -709,6 +712,11 @@ server.tool(
         return getStylesForLocator({ locator: options.locator, cdp })
       }
 
+      const getReactSourceFn = async (options: { locator: any }) => {
+        const cdp = await getCDPSession({ page: options.locator.page() })
+        return getReactSource({ locator: options.locator, cdp })
+      }
+
       let vmContextObj: VMContextWithGlobals = {
         page,
         context,
@@ -724,6 +732,7 @@ server.tool(
         createEditor,
         getStylesForLocator: getStylesForLocatorFn,
         formatStylesAsText,
+        getReactSource: getReactSourceFn,
         resetPlaywright: async () => {
           const { page: newPage, context: newContext } = await resetConnection()
 
@@ -742,6 +751,7 @@ server.tool(
             createEditor,
             getStylesForLocator: getStylesForLocatorFn,
             formatStylesAsText,
+            getReactSource: getReactSourceFn,
             resetPlaywright: vmContextObj.resetPlaywright,
             require,
             // TODO --experimental-vm-modules is needed to make import work in vm

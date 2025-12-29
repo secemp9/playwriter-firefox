@@ -2809,4 +2809,84 @@ describe('CDP Session Tests', () => {
         await browser.close()
         await page.close()
     }, 60000)
+
+    it('should inject bippy and find React fiber with getReactSource', async () => {
+        const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        const page = await browserContext.newPage()
+        await page.setContent(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+                <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+            </head>
+            <body>
+                <div id="root"></div>
+                <script>
+                    function MyComponent() {
+                        return React.createElement('button', { id: 'react-btn' }, 'Click me');
+                    }
+                    const root = ReactDOM.createRoot(document.getElementById('root'));
+                    root.render(React.createElement(MyComponent));
+                </script>
+            </body>
+            </html>
+        `)
+        await page.bringToFront()
+
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+        await new Promise(r => setTimeout(r, 500))
+
+        const browser = await chromium.connectOverCDP(getCdpUrl({ port: TEST_PORT }))
+        const pages = browser.contexts()[0].pages()
+        const cdpPage = pages.find(p => p.url().startsWith('about:'))
+        expect(cdpPage).toBeDefined()
+
+        const btn = cdpPage!.locator('#react-btn')
+        const btnCount = await btn.count()
+        expect(btnCount).toBe(1)
+
+        const hasBippyBefore = await cdpPage!.evaluate(() => !!(globalThis as any).__bippy)
+        expect(hasBippyBefore).toBe(false)
+
+        const wsUrl = getCdpUrl({ port: TEST_PORT })
+        const cdpSession = await getCDPSessionForPage({ page: cdpPage!, wsUrl })
+
+        const { getReactSource } = await import('./react-source.js')
+        const source = await getReactSource({ locator: btn, cdp: cdpSession })
+
+        const hasBippyAfter = await cdpPage!.evaluate(() => !!(globalThis as any).__bippy)
+        expect(hasBippyAfter).toBe(true)
+
+        const hasFiber = await btn.evaluate((el) => {
+            const bippy = (globalThis as any).__bippy
+            const fiber = bippy.getFiberFromHostInstance(el)
+            return !!fiber
+        })
+        expect(hasFiber).toBe(true)
+
+        const componentName = await btn.evaluate((el) => {
+            const bippy = (globalThis as any).__bippy
+            const fiber = bippy.getFiberFromHostInstance(el)
+            let current = fiber
+            while (current) {
+                if (bippy.isCompositeFiber(current)) {
+                    return bippy.getDisplayName(current.type)
+                }
+                current = current.return
+            }
+            return null
+        })
+        expect(componentName).toBe('MyComponent')
+
+        console.log('Component name from fiber:', componentName)
+        console.log('Source location (null for UMD React, works on local dev servers with JSX transform):', source)
+
+        await browser.close()
+        await page.close()
+    }, 60000)
 })
