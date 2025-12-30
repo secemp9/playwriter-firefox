@@ -503,6 +503,43 @@ server.resource('editor-api', 'playwriter://editor-api', { mimeType: 'text/plain
   }
 })
 
+server.resource('styles-api', 'playwriter://styles-api', { mimeType: 'text/plain' }, async () => {
+  const packageJsonPath = require.resolve('playwriter/package.json')
+  const distDir = path.join(path.dirname(packageJsonPath), 'dist')
+
+  const stylesTypes = fs
+    .readFileSync(path.join(distDir, 'styles.d.ts'), 'utf-8')
+    .replace(/\/\/# sourceMappingURL=.*$/gm, '')
+    .trim()
+  const stylesExamples = fs.readFileSync(path.join(distDir, 'styles-examples.ts'), 'utf-8')
+
+  return {
+    contents: [
+      {
+        uri: 'playwriter://styles-api',
+        text: dedent`
+          # Styles API Reference
+
+          The getStylesForLocator function inspects CSS styles applied to an element, similar to browser DevTools "Styles" panel.
+
+          ## Types
+
+          \`\`\`ts
+          ${stylesTypes}
+          \`\`\`
+
+          ## Examples
+
+          \`\`\`ts
+          ${stylesExamples}
+          \`\`\`
+        `,
+        mimeType: 'text/plain',
+      },
+    ],
+  }
+})
+
 server.tool(
   'execute',
   promptContent,
