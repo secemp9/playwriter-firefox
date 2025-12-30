@@ -32,10 +32,10 @@ export default defineConfig({
     EnvironmentPlugin("all", { prefix: "NEXT_PUBLIC" }),
     process.env.VITEST ? react() : reactRouter(),
     tsconfigPaths(),
-    // viteExternalsPlugin({
-    //   externals: ["@sentry/node"],
-    // }),
-    // enablePreserveModulesPlugin(),
+    viteExternalsPlugin({
+      externals: ["@sentry/node"],
+    }),
+    enablePreserveModulesPlugin(),
     reactRouterServerPlugin({ port: process.env.PORT || '8044' }),
     tailwindcss(),
   ],
