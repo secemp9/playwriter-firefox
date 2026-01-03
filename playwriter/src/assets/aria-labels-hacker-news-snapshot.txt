@@ -56,11 +56,11 @@
                     - link "indieweb.org" [ref=e42] [cursor=pointer]:
                       - /url: from?site=indieweb.org
                     - text: )
-            - row "822 points by 47thpresident 19 hours ago | hide | 186 comments" [ref=e43]:
+            - row "828 points by 47thpresident 19 hours ago | hide | 188 comments" [ref=e43]:
               - cell [ref=e44]
-              - cell "822 points by 47thpresident 19 hours ago | hide | 186 comments" [ref=e45]:
+              - cell "828 points by 47thpresident 19 hours ago | hide | 188 comments" [ref=e45]:
                 - generic [ref=e46]:
-                  - text: 822 points by
+                  - text: 828 points by
                   - link "47thpresident" [ref=e47] [cursor=pointer]:
                     - /url: user?id=47thpresident
                   - generic "2026-01-02T19:48:25 1767383305" [ref=e48]:
@@ -70,7 +70,7 @@
                   - link "hide" [ref=e50] [cursor=pointer]:
                     - /url: hide?id=46468600&goto=news
                   - text: "|"
-                  - link "186 comments" [ref=e51] [cursor=pointer]:
+                  - link "188 comments" [ref=e51] [cursor=pointer]:
                     - /url: item?id=46468600
             - row [ref=e52]
             - row "2. upvote Trump says Venezuela’s Maduro captured after strikes (reuters.com)" [ref=e53]:
@@ -88,11 +88,11 @@
                     - link "reuters.com" [ref=e63] [cursor=pointer]:
                       - /url: from?site=reuters.com
                     - text: )
-            - row "695 points by jumpocelot 9 hours ago | hide | 1696 comments" [ref=e64]:
+            - row "701 points by jumpocelot 9 hours ago | hide | 1717 comments" [ref=e64]:
               - cell [ref=e65]
-              - cell "695 points by jumpocelot 9 hours ago | hide | 1696 comments" [ref=e66]:
+              - cell "701 points by jumpocelot 9 hours ago | hide | 1717 comments" [ref=e66]:
                 - generic [ref=e67]:
-                  - text: 695 points by
+                  - text: 701 points by
                   - link "jumpocelot" [ref=e68] [cursor=pointer]:
                     - /url: user?id=jumpocelot
                   - generic "2026-01-03T06:35:21 1767422121" [ref=e69]:
@@ -102,7 +102,7 @@
                   - link "hide" [ref=e71] [cursor=pointer]:
                     - /url: hide?id=46473348&goto=news
                   - text: "|"
-                  - link "1696 comments" [ref=e72] [cursor=pointer]:
+                  - link "1717 comments" [ref=e72] [cursor=pointer]:
                     - /url: item?id=46473348
             - row [ref=e73]
             - row "3. upvote Daft Punk Easter Egg in the BPM Tempo of Harder, Better, Faster, Stronger? (madebywindmill.com)" [ref=e74]:
@@ -120,11 +120,11 @@
                     - link "madebywindmill.com" [ref=e84] [cursor=pointer]:
                       - /url: from?site=madebywindmill.com
                     - text: )
-            - row "598 points by simonw 18 hours ago | hide | 98 comments" [ref=e85]:
+            - row "601 points by simonw 18 hours ago | hide | 98 comments" [ref=e85]:
               - cell [ref=e86]
-              - cell "598 points by simonw 18 hours ago | hide | 98 comments" [ref=e87]:
+              - cell "601 points by simonw 18 hours ago | hide | 98 comments" [ref=e87]:
                 - generic [ref=e88]:
-                  - text: 598 points by
+                  - text: 601 points by
                   - link "simonw" [ref=e89] [cursor=pointer]:
                     - /url: user?id=simonw
                   - generic "2026-01-02T21:27:44 1767389264" [ref=e90]:
@@ -152,11 +152,11 @@
                     - link "hleb.dev" [ref=e105] [cursor=pointer]:
                       - /url: from?site=hleb.dev
                     - text: )
-            - row "31 points by hleb_dev 4 hours ago | hide | 8 comments" [ref=e106]:
+            - row "33 points by hleb_dev 4 hours ago | hide | 9 comments" [ref=e106]:
               - cell [ref=e107]
-              - cell "31 points by hleb_dev 4 hours ago | hide | 8 comments" [ref=e108]:
+              - cell "33 points by hleb_dev 4 hours ago | hide | 9 comments" [ref=e108]:
                 - generic [ref=e109]:
-                  - text: 31 points by
+                  - text: 33 points by
                   - link "hleb_dev" [ref=e110] [cursor=pointer]:
                     - /url: user?id=hleb_dev
                   - generic "2026-01-03T11:37:07 1767440227" [ref=e111]:
@@ -166,7 +166,7 @@
                   - link "hide" [ref=e113] [cursor=pointer]:
                     - /url: hide?id=46475437&goto=news
                   - text: "|"
-                  - link "8 comments" [ref=e114] [cursor=pointer]:
+                  - link "9 comments" [ref=e114] [cursor=pointer]:
                     - /url: item?id=46475437
             - row [ref=e115]
             - 'row "5. upvote Of Boot Vectors and Double Glitches: Bypassing RP2350''s Secure Boot (ccc.de)" [ref=e116]':
@@ -184,11 +184,11 @@
                     - link "ccc.de" [ref=e126] [cursor=pointer]:
                       - /url: from?site=ccc.de
                     - text: )
-            - row "106 points by aberoham 12 hours ago | hide | 11 comments" [ref=e127]:
+            - row "107 points by aberoham 12 hours ago | hide | 11 comments" [ref=e127]:
               - cell [ref=e128]
-              - cell "106 points by aberoham 12 hours ago | hide | 11 comments" [ref=e129]:
+              - cell "107 points by aberoham 12 hours ago | hide | 11 comments" [ref=e129]:
                 - generic [ref=e130]:
-                  - text: 106 points by
+                  - text: 107 points by
                   - link "aberoham" [ref=e131] [cursor=pointer]:
                     - /url: user?id=aberoham
                   - generic "2025-12-27T16:49:39 1766854179" [ref=e132]:
@@ -216,11 +216,11 @@
                     - link "theregister.com" [ref=e147] [cursor=pointer]:
                       - /url: from?site=theregister.com
                     - text: )
-            - row "442 points by Brajeshwar 1 day ago | hide | 887 comments" [ref=e148]:
+            - row "443 points by Brajeshwar 1 day ago | hide | 890 comments" [ref=e148]:
               - cell [ref=e149]
-              - cell "442 points by Brajeshwar 1 day ago | hide | 887 comments" [ref=e150]:
+              - cell "443 points by Brajeshwar 1 day ago | hide | 890 comments" [ref=e150]:
                 - generic [ref=e151]:
-                  - text: 442 points by
+                  - text: 443 points by
                   - link "Brajeshwar" [ref=e152] [cursor=pointer]:
                     - /url: user?id=Brajeshwar
                   - generic "2026-01-02T14:55:09 1767365709" [ref=e153]:
@@ -230,7 +230,7 @@
                   - link "hide" [ref=e155] [cursor=pointer]:
                     - /url: hide?id=46465327&goto=news
                   - text: "|"
-                  - link "887 comments" [ref=e156] [cursor=pointer]:
+                  - link "890 comments" [ref=e156] [cursor=pointer]:
                     - /url: item?id=46465327
             - row [ref=e157]
             - row "7. upvote A Beginner's Two-Component Crystal-Style Wi-Fi Detector (siliconjunction.wordpress.com)" [ref=e158]:
@@ -248,9 +248,9 @@
                     - link "siliconjunction.wordpress.com" [ref=e168] [cursor=pointer]:
                       - /url: from?site=siliconjunction.wordpress.com
                     - text: )
-            - row "75 points by jensgk 10 hours ago | hide | 27 comments" [ref=e169]:
+            - row "75 points by jensgk 10 hours ago | hide | 28 comments" [ref=e169]:
               - cell [ref=e170]
-              - cell "75 points by jensgk 10 hours ago | hide | 27 comments" [ref=e171]:
+              - cell "75 points by jensgk 10 hours ago | hide | 28 comments" [ref=e171]:
                 - generic [ref=e172]:
                   - text: 75 points by
                   - link "jensgk" [ref=e173] [cursor=pointer]:
@@ -262,7 +262,7 @@
                   - link "hide" [ref=e176] [cursor=pointer]:
                     - /url: hide?id=46443730&goto=news
                   - text: "|"
-                  - link "27 comments" [ref=e177] [cursor=pointer]:
+                  - link "28 comments" [ref=e177] [cursor=pointer]:
                     - /url: item?id=46443730
             - row [ref=e178]
             - row "8. ParadeDB (YC S23) Is Hiring Database Engineers (paradedb.notion.site)" [ref=e179]:
@@ -367,11 +367,11 @@
                     - link "xeiaso.net" [ref=e247] [cursor=pointer]:
                       - /url: from?site=xeiaso.net
                     - text: )
-            - row "634 points by todsacerdoti 15 hours ago | hide | 468 comments" [ref=e248]:
+            - row "635 points by todsacerdoti 15 hours ago | hide | 468 comments" [ref=e248]:
               - cell [ref=e249]
-              - cell "634 points by todsacerdoti 15 hours ago | hide | 468 comments" [ref=e250]:
+              - cell "635 points by todsacerdoti 15 hours ago | hide | 468 comments" [ref=e250]:
                 - generic [ref=e251]:
-                  - text: 634 points by
+                  - text: 635 points by
                   - link "todsacerdoti" [ref=e252] [cursor=pointer]:
                     - /url: user?id=todsacerdoti
                   - generic "2026-01-03T00:15:47 1767399347" [ref=e253]:
@@ -425,9 +425,9 @@
               - 'cell "Ask HN: Who is hiring? (January 2026)" [ref=e285]':
                 - 'link "Ask HN: Who is hiring? (January 2026)" [ref=e287] [cursor=pointer]':
                   - /url: item?id=46466074
-            - row "309 points by whoishiring 23 hours ago | hide | 190 comments" [ref=e288]:
+            - row "309 points by whoishiring 23 hours ago | hide | 191 comments" [ref=e288]:
               - cell [ref=e289]
-              - cell "309 points by whoishiring 23 hours ago | hide | 190 comments" [ref=e290]:
+              - cell "309 points by whoishiring 23 hours ago | hide | 191 comments" [ref=e290]:
                 - generic [ref=e291]:
                   - text: 309 points by
                   - link "whoishiring" [ref=e292] [cursor=pointer]:
@@ -439,7 +439,7 @@
                   - link "hide" [ref=e295] [cursor=pointer]:
                     - /url: hide?id=46466074&goto=news
                   - text: "|"
-                  - link "190 comments" [ref=e296] [cursor=pointer]:
+                  - link "191 comments" [ref=e296] [cursor=pointer]:
                     - /url: item?id=46466074
             - row [ref=e297]
             - row "14. upvote How Smell Guides Our Inner World (quantamagazine.org)" [ref=e298]:
@@ -489,9 +489,9 @@
                     - link "kroah.com" [ref=e329] [cursor=pointer]:
                       - /url: from?site=kroah.com
                     - text: )
-            - row "132 points by chmaynard 18 hours ago | hide | 57 comments" [ref=e330]:
+            - row "132 points by chmaynard 18 hours ago | hide | 58 comments" [ref=e330]:
               - cell [ref=e331]
-              - cell "132 points by chmaynard 18 hours ago | hide | 57 comments" [ref=e332]:
+              - cell "132 points by chmaynard 18 hours ago | hide | 58 comments" [ref=e332]:
                 - generic [ref=e333]:
                   - text: 132 points by
                   - link "chmaynard" [ref=e334] [cursor=pointer]:
@@ -503,7 +503,7 @@
                   - link "hide" [ref=e337] [cursor=pointer]:
                     - /url: hide?id=46469623&goto=news
                   - text: "|"
-                  - link "57 comments" [ref=e338] [cursor=pointer]:
+                  - link "58 comments" [ref=e338] [cursor=pointer]:
                     - /url: item?id=46469623
             - row [ref=e339]
             - row "16. upvote UK company sends factory with 1,000C furnace into space (bbc.co.uk)" [ref=e340]:
@@ -585,15 +585,15 @@
                     - link "github.com/jank-lang" [ref=e392] [cursor=pointer]:
                       - /url: from?site=github.com/jank-lang
                     - text: )
-            - row "203 points by makemethrowaway 19 hours ago | hide | 27 comments" [ref=e393]:
+            - row "203 points by makemethrowaway 20 hours ago | hide | 27 comments" [ref=e393]:
               - cell [ref=e394]
-              - cell "203 points by makemethrowaway 19 hours ago | hide | 27 comments" [ref=e395]:
+              - cell "203 points by makemethrowaway 20 hours ago | hide | 27 comments" [ref=e395]:
                 - generic [ref=e396]:
                   - text: 203 points by
                   - link "makemethrowaway" [ref=e397] [cursor=pointer]:
                     - /url: user?id=makemethrowaway
                   - generic "2026-01-02T19:39:38 1767382778" [ref=e398]:
-                    - link "19 hours ago" [ref=e399] [cursor=pointer]:
+                    - link "20 hours ago" [ref=e399] [cursor=pointer]:
                       - /url: item?id=46468517
                   - text: "|"
                   - link "hide" [ref=e400] [cursor=pointer]:
@@ -739,9 +739,9 @@
               - 'cell "Ask HN: Who wants to be hired? (January 2026)" [ref=e493]':
                 - 'link "Ask HN: Who wants to be hired? (January 2026)" [ref=e495] [cursor=pointer]':
                   - /url: item?id=46466073
-            - row "128 points by whoishiring 23 hours ago | hide | 238 comments" [ref=e496]:
+            - row "128 points by whoishiring 23 hours ago | hide | 239 comments" [ref=e496]:
               - cell [ref=e497]
-              - cell "128 points by whoishiring 23 hours ago | hide | 238 comments" [ref=e498]:
+              - cell "128 points by whoishiring 23 hours ago | hide | 239 comments" [ref=e498]:
                 - generic [ref=e499]:
                   - text: 128 points by
                   - link "whoishiring" [ref=e500] [cursor=pointer]:
@@ -753,7 +753,7 @@
                   - link "hide" [ref=e503] [cursor=pointer]:
                     - /url: hide?id=46466073&goto=news
                   - text: "|"
-                  - link "238 comments" [ref=e504] [cursor=pointer]:
+                  - link "239 comments" [ref=e504] [cursor=pointer]:
                     - /url: item?id=46466073
             - row [ref=e505]
             - row "24. upvote Adventure 751 (1980) (bluerenga.blog)" [ref=e506]:
@@ -899,21 +899,21 @@
                     - link "thephd.dev" [ref=e600] [cursor=pointer]:
                       - /url: from?site=thephd.dev
                     - text: )
-            - row "55 points by ingve 12 hours ago | hide | 23 comments" [ref=e601]:
+            - row "55 points by ingve 13 hours ago | hide | 24 comments" [ref=e601]:
               - cell [ref=e602]
-              - cell "55 points by ingve 12 hours ago | hide | 23 comments" [ref=e603]:
+              - cell "55 points by ingve 13 hours ago | hide | 24 comments" [ref=e603]:
                 - generic [ref=e604]:
                   - text: 55 points by
                   - link "ingve" [ref=e605] [cursor=pointer]:
                     - /url: user?id=ingve
                   - generic "2025-12-31T07:44:25 1767167065" [ref=e606]:
-                    - link "12 hours ago" [ref=e607] [cursor=pointer]:
+                    - link "13 hours ago" [ref=e607] [cursor=pointer]:
                       - /url: item?id=46442229
                   - text: "|"
                   - link "hide" [ref=e608] [cursor=pointer]:
                     - /url: hide?id=46442229&goto=news
                   - text: "|"
-                  - link "23 comments" [ref=e609] [cursor=pointer]:
+                  - link "24 comments" [ref=e609] [cursor=pointer]:
                     - /url: item?id=46442229
             - row [ref=e610]
             - row "29. upvote Einstein Probe detects an X-ray flare from nearby star (phys.org)" [ref=e611]:

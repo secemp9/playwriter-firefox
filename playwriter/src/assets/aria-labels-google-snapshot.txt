@@ -31,7 +31,7 @@
     - generic [ref=e55]:
       - text: "Google offered in:"
       - link [ref=e56] [cursor=pointer]:
-        - /url: https://www.google.com/setprefs?sig=0_BrPqcpi5Yw7nw8qkQeZlfefk7NQ%3D&hl=it&source=homepage&sa=X&ved=0ahUKEwj11bOl2u-RAxVbFjQIHS-hAAgQ2ZgBCBU
+        - /url: https://www.google.com/setprefs?sig=0_LaNB9MnwJduON19vFVmxHtMW8aY%3D&hl=it&source=homepage&sa=X&ved=0ahUKEwj22fSr2--RAxXoGTQIHVbSDAcQ2ZgBCBU
         - text: Italiano
     - contentinfo [ref=e58]:
       - generic [ref=e59]: Italy

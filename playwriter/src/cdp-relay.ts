@@ -388,14 +388,20 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
 
   // Validate Origin header for WebSocket connections to prevent cross-origin attacks.
   // Browsers always send Origin header for WebSocket connections, but Node.js clients don't.
-  // We reject browser origins (except chrome-extension://) to prevent malicious websites
+  // We only allow our specific extension IDs to prevent malicious websites or extensions
   // from connecting to the local WebSocket server.
+  const ALLOWED_EXTENSION_IDS = [
+    'jfeammnjpkecdekppnclgkkffahnhfhe', // Production extension (Chrome Web Store)
+    'elnnakgjclnapgflmidlpobefkdmapdm', // Dev extension (loaded unpacked)
+  ]
+
   function isAllowedOrigin(origin: string | undefined): boolean {
     if (!origin) {
       return true // Node.js clients don't send Origin
     }
     if (origin.startsWith('chrome-extension://')) {
-      return true // Chrome extension is allowed
+      const extensionId = origin.replace('chrome-extension://', '')
+      return ALLOWED_EXTENSION_IDS.includes(extensionId)
     }
     return false // Reject browser origins (http://, https://, etc.)
   }
