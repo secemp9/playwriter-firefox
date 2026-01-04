@@ -14,7 +14,6 @@ function sleep(ms: number): Promise<void> {
 
 let childSessions: Map<string, number> = new Map()
 let nextSessionId = 1
-let playwriterGroupId: number | null = null
 let tabGroupQueue: Promise<void> = Promise.resolve()
 
 class ConnectionManager {
@@ -427,63 +426,60 @@ async function syncTabGroup(): Promise<void> {
       .filter(([_, info]) => info.state === 'connected')
       .map(([tabId]) => tabId)
 
+    // Always query by title - no cached ID that can go stale
     const existingGroups = await chrome.tabGroups.query({ title: 'playwriter' })
 
-    // Check for no connected tabs FIRST, before setting playwriterGroupId
-    // This prevents a race condition where onTabUpdated sees playwriterGroupId !== null
+    // If no connected tabs, clear any existing playwriter groups
     if (connectedTabIds.length === 0) {
       for (const group of existingGroups) {
         const tabsInGroup = await chrome.tabs.query({ groupId: group.id })
-        for (const tab of tabsInGroup) {
-          if (tab.id) {
-            await chrome.tabs.ungroup(tab.id)
-          }
+        const tabIdsToUngroup = tabsInGroup.map((t) => t.id).filter((id): id is number => id !== undefined)
+        if (tabIdsToUngroup.length > 0) {
+          await chrome.tabs.ungroup(tabIdsToUngroup)
         }
         logger.debug('Cleared playwriter group:', group.id)
       }
-      playwriterGroupId = null
       return
     }
 
+    // Consolidate duplicate groups into one
+    let groupId: number | undefined = existingGroups[0]?.id
     if (existingGroups.length > 1) {
       const [keep, ...duplicates] = existingGroups
+      groupId = keep.id
       for (const group of duplicates) {
         const tabsInDupe = await chrome.tabs.query({ groupId: group.id })
-        for (const tab of tabsInDupe) {
-          if (tab.id) {
-            await chrome.tabs.ungroup(tab.id)
-          }
+        const tabIdsToUngroup = tabsInDupe.map((t) => t.id).filter((id): id is number => id !== undefined)
+        if (tabIdsToUngroup.length > 0) {
+          await chrome.tabs.ungroup(tabIdsToUngroup)
         }
         logger.debug('Removed duplicate playwriter group:', group.id)
       }
-      playwriterGroupId = keep.id
-    } else if (existingGroups.length === 1) {
-      playwriterGroupId = existingGroups[0].id
     }
 
     const allTabs = await chrome.tabs.query({})
-    const tabsInGroup = allTabs.filter((t) => t.groupId === playwriterGroupId && t.id !== undefined)
+    const tabsInGroup = allTabs.filter((t) => t.groupId === groupId && t.id !== undefined)
     const tabIdsInGroup = new Set(tabsInGroup.map((t) => t.id!))
 
     const tabsToAdd = connectedTabIds.filter((id) => !tabIdsInGroup.has(id))
     const tabsToRemove = Array.from(tabIdsInGroup).filter((id) => !connectedTabIds.includes(id))
 
-    for (const tabId of tabsToRemove) {
+    if (tabsToRemove.length > 0) {
       try {
-        await chrome.tabs.ungroup(tabId)
-        logger.debug('Removed tab from group:', tabId)
+        await chrome.tabs.ungroup(tabsToRemove)
+        logger.debug('Removed tabs from group:', tabsToRemove)
       } catch (e: any) {
-        logger.debug('Failed to ungroup tab:', tabId, e.message)
+        logger.debug('Failed to ungroup tabs:', tabsToRemove, e.message)
       }
     }
 
     if (tabsToAdd.length > 0) {
-      if (playwriterGroupId === null) {
-        playwriterGroupId = await chrome.tabs.group({ tabIds: tabsToAdd })
-        await chrome.tabGroups.update(playwriterGroupId, { title: 'playwriter', color: 'green' })
-        logger.debug('Created tab group:', playwriterGroupId, 'with tabs:', tabsToAdd)
+      if (groupId === undefined) {
+        const newGroupId = await chrome.tabs.group({ tabIds: tabsToAdd })
+        await chrome.tabGroups.update(newGroupId, { title: 'playwriter', color: 'green' })
+        logger.debug('Created tab group:', newGroupId, 'with tabs:', tabsToAdd)
       } else {
-        await chrome.tabs.group({ tabIds: tabsToAdd, groupId: playwriterGroupId })
+        await chrome.tabs.group({ tabIds: tabsToAdd, groupId })
         logger.debug('Added tabs to existing group:', tabsToAdd)
       }
     }
@@ -876,7 +872,6 @@ async function toggleExtensionForActiveTab(): Promise<{ isConnected: boolean; st
 async function disconnectEverything(): Promise<void> {
   // Queue disconnect operation to serialize with other tab group operations
   tabGroupQueue = tabGroupQueue.then(async () => {
-    playwriterGroupId = null
     const { tabs } = store.getState()
     for (const tabId of tabs.keys()) {
       await disconnectTab(tabId)
@@ -1164,12 +1159,14 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.groupId !== undefined) {
     // Queue tab group operations to serialize with syncTabGroup and disconnectEverything
     tabGroupQueue = tabGroupQueue.then(async () => {
-      // Re-check conditions after queue - state may have changed
-      if (playwriterGroupId === null) {
+      // Query for playwriter group by title - no stale cached ID
+      const existingGroups = await chrome.tabGroups.query({ title: 'playwriter' })
+      const groupId = existingGroups[0]?.id
+      if (groupId === undefined) {
         return
       }
       const { tabs } = store.getState()
-      if (changeInfo.groupId === playwriterGroupId) {
+      if (changeInfo.groupId === groupId) {
         if (!tabs.has(tabId) && !isRestrictedUrl(tab.url)) {
           logger.debug('Tab manually added to playwriter group:', tabId)
           await connectTab(tabId)
