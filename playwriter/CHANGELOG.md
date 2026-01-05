@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.0.40
+
+### Features
+
+- **`screenshotWithAccessibilityLabels`**: New utility function that takes a screenshot with Vimium-style visual labels overlaid on interactive elements
+  - Labels show aria-ref IDs that can be used with `page.locator('aria-ref=e5')`
+  - Image and accessibility snapshot are automatically included in the response
+  - Can be called multiple times to capture multiple screenshots
+  - Labels are color-coded by element type
+- **Media elements in aria labels**: Added `img`, `video`, `audio` to INTERACTIVE_ROLES
+  - Light blue color scheme for media element labels
+  - Agents can now reference images by aria-ref for visual tasks
+
+### Patch Changes
+
+- **Extension fix**: Query playwriter tab group by title instead of caching ID, fixing stale group issues after debugger detach/reattach
+
 ## 0.0.39
 
 ### Patch Changes
