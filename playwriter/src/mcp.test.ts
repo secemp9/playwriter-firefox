@@ -2436,6 +2436,96 @@ describe('MCP Server Tests', () => {
         await page.close()
     }, 60000)
 
+    it('should get clean HTML with getCleanHTML', async () => {
+        const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        const page = await browserContext.newPage()
+        await page.setContent(`
+            <html>
+                <head>
+                    <style>.hidden { display: none; }</style>
+                    <script>console.log('test')</script>
+                </head>
+                <body>
+                    <div class="container" data-testid="main">
+                        <h1>Hello World</h1>
+                        <button id="btn" aria-label="Click me">Submit</button>
+                        <a href="/about" title="About page">About</a>
+                        <input type="text" placeholder="Enter name" />
+                    </div>
+                </body>
+            </html>
+        `)
+        await page.bringToFront()
+
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+        await new Promise(r => setTimeout(r, 400))
+
+        // Test basic getCleanHTML
+        const result = await client.callTool({
+            name: 'execute',
+            arguments: {
+                code: js`
+                    let testPage;
+                    for (const p of context.pages()) {
+                        const html = await p.content();
+                        if (html.includes('Hello World')) { testPage = p; break; }
+                    }
+                    if (!testPage) throw new Error('Test page not found');
+                    const html = await getCleanHTML({ locator: testPage.locator('body') });
+                    return html;
+                `,
+                timeout: 15000,
+            },
+        })
+
+        expect(result.isError).toBeFalsy()
+        const text = (result.content as any)[0]?.text || ''
+
+        // Inline snapshot of cleaned HTML
+        expect(text).toMatchInlineSnapshot(`
+          "Return value:
+          <div data-testid="main">
+           <h1>Hello World</h1>
+           <button aria-label="Click me">Submit</button>
+           <a href="/about" title="About page">About</a>
+           <input type="text" placeholder="Enter name">
+          </div>"
+        `)
+
+        // Should NOT contain script/style tags (they're removed)
+        expect(text).not.toContain('<script')
+        expect(text).not.toContain('<style')
+        expect(text).not.toContain('console.log')
+
+        // Test search functionality
+        const searchResult = await client.callTool({
+            name: 'execute',
+            arguments: {
+                code: js`
+                    let testPage;
+                    for (const p of context.pages()) {
+                        const html = await p.content();
+                        if (html.includes('Hello World')) { testPage = p; break; }
+                    }
+                    if (!testPage) throw new Error('Test page not found');
+                    const html = await getCleanHTML({ locator: testPage, search: /button/i });
+                    return html;
+                `,
+                timeout: 15000,
+            },
+        })
+
+        expect(searchResult.isError).toBeFalsy()
+        const searchText = (searchResult.content as any)[0]?.text || ''
+        expect(searchText).toContain('button')
+
+        await page.close()
+    }, 60000)
+
 })
 
 

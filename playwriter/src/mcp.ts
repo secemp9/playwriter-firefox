@@ -22,6 +22,7 @@ import { getStylesForLocator, formatStylesAsText, type StylesResult } from './st
 import { getReactSource, type ReactSourceLocation } from './react-source.js'
 import { ScopedFS } from './scoped-fs.js'
 import { screenshotWithAccessibilityLabels, type ScreenshotResult } from './aria-snapshot.js'
+import { getCleanHTML, type GetCleanHTMLOptions } from './clean-html.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -72,9 +73,9 @@ interface VMContext {
   accessibilitySnapshot: (options: {
     page: Page
     search?: string | RegExp
-    contextLines?: number
     showDiffSinceLastCall?: boolean
   }) => Promise<string>
+  getCleanHTML: (options: GetCleanHTMLOptions) => Promise<string>
   getLocatorStringForElement: (element: any) => Promise<string>
   resetPlaywright: () => Promise<{ page: Page; context: BrowserContext }>
   getLatestLogs: (options?: { page?: Page; count?: number; search?: string | RegExp }) => Promise<string[]>
@@ -713,10 +714,9 @@ server.tool(
       const accessibilitySnapshot = async (options: {
         page: Page
         search?: string | RegExp
-        contextLines?: number
         showDiffSinceLastCall?: boolean
       }) => {
-        const { page: targetPage, search, contextLines = 10, showDiffSinceLastCall = false } = options
+        const { page: targetPage, search, showDiffSinceLastCall = false } = options
         if ((targetPage as any)._snapshotForAI) {
           const snapshot = await (targetPage as any)._snapshotForAI()
           // Sanitize to remove unpaired surrogates that break JSON encoding for Claude API
@@ -732,7 +732,7 @@ server.tool(
             }
 
             const patch = createPatch('snapshot', previousSnapshot, snapshotStr, 'previous', 'current', {
-              context: contextLines,
+              context: 3,
             })
             if (patch.split('\n').length <= 4) {
               return 'No changes detected since last snapshot'
@@ -747,10 +747,9 @@ server.tool(
           }
 
           const lines = snapshotStr.split('\n')
-          const matches: { line: string; index: number }[] = []
+          const matches: string[] = []
 
-          for (let i = 0; i < lines.length; i++) {
-            const line = lines[i]
+          for (const line of lines) {
             let isMatch = false
             if (isRegExp(search)) {
               isMatch = search.test(line)
@@ -759,7 +758,7 @@ server.tool(
             }
 
             if (isMatch) {
-              matches.push({ line, index: i })
+              matches.push(line)
               if (matches.length >= 10) break
             }
           }
@@ -768,13 +767,7 @@ server.tool(
             return 'No matches found'
           }
 
-          return matches
-            .map((m) => {
-              const start = Math.max(0, m.index - contextLines)
-              const end = Math.min(lines.length, m.index + contextLines + 1)
-              return lines.slice(start, end).join('\n')
-            })
-            .join('\n\n---\n\n')
+          return matches.join('\n')
         }
         throw new Error('accessibilitySnapshot is not available on this page')
       }
@@ -878,6 +871,7 @@ server.tool(
         state: userState,
         console: customConsole,
         accessibilitySnapshot,
+        getCleanHTML,
         getLocatorStringForElement,
         getLatestLogs,
         clearAllLogs,
@@ -898,6 +892,7 @@ server.tool(
             state: userState,
             console: customConsole,
             accessibilitySnapshot,
+            getCleanHTML,
             getLocatorStringForElement,
             getLatestLogs,
             clearAllLogs,

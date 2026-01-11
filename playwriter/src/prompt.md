@@ -38,12 +38,17 @@ If nothing changed, try `await page.waitForLoadState('networkidle', {timeout: 30
 ## accessibility snapshots
 
 ```js
-await accessibilitySnapshot({ page, search?, contextLines?, showDiffSinceLastCall? })
+await accessibilitySnapshot({ page, search?, showDiffSinceLastCall? })
 ```
 
-- `search` - string/regex to filter results (returns first 10 matches with context)
-- `contextLines` - lines of context around matches (default: 10)
+- `search` - string/regex to filter results (returns first 10 matching lines)
 - `showDiffSinceLastCall` - returns diff since last snapshot (useful after actions)
+
+For pagination, use `.split('\n').slice(offset, offset + limit).join('\n')`:
+```js
+console.log((await accessibilitySnapshot({ page })).split('\n').slice(0, 50).join('\n'));   // first 50 lines
+console.log((await accessibilitySnapshot({ page })).split('\n').slice(50, 100).join('\n')); // next 50 lines
+```
 
 Example output:
 
@@ -173,6 +178,29 @@ const pageLogs = await getLatestLogs({ page })
 ```
 
 For custom log collection across runs, store in state: `state.logs = []; page.on('console', m => state.logs.push(m.text()))`
+
+**getCleanHTML** - get cleaned HTML from a locator or page, with search and diffing:
+
+```js
+await getCleanHTML({ locator, search?, showDiffSinceLastCall?, includeStyles? })
+// Examples:
+const html = await getCleanHTML({ locator: page.locator('body') })
+const html = await getCleanHTML({ locator: page, search: /button/i })
+const diff = await getCleanHTML({ locator: page, showDiffSinceLastCall: true })
+```
+
+- `locator` - Playwright Locator or Page to get HTML from
+- `search` - string/regex to filter results (returns first 10 matching lines)
+- `showDiffSinceLastCall` - returns diff since last snapshot
+- `includeStyles` - keep style and class attributes (default: false)
+
+Returns cleaned HTML with only essential attributes (aria-*, data-*, href, role, title, alt, etc.). Removes script, style, svg, head tags.
+
+For pagination, use `.split('\n').slice(offset, offset + limit).join('\n')`:
+```js
+console.log((await getCleanHTML({ locator: page })).split('\n').slice(0, 50).join('\n'));   // first 50 lines
+console.log((await getCleanHTML({ locator: page })).split('\n').slice(50, 100).join('\n')); // next 50 lines
+```
 
 **waitForPageLoad** - smart load detection that ignores analytics/ads:
 

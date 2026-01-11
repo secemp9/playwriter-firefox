@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.0.43
+
+### Features
+
+- **`getCleanHTML` utility**: New function to get cleaned HTML from a locator or page
+  - Removes script, style, svg, head tags
+  - Keeps only essential attributes (aria-*, data-*, href, role, title, alt, etc.)
+  - Supports `search` option to filter results (returns first 10 matching lines)
+  - Supports `showDiffSinceLastCall` to see changes since last snapshot
+  - Supports `includeStyles` to optionally keep style/class attributes
+
+### Changes
+
+- **Simplified `accessibilitySnapshot` search**: Removed `contextLines` parameter, search now returns just matching lines instead of context around matches. Use `.split('\n').slice()` for pagination instead.
+
 ## 0.0.42
 
 ### Bug Fixes
