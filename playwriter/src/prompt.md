@@ -20,7 +20,7 @@ You can collaborate with the user - they can help with captchas, difficult eleme
 - **Check state after actions**: always verify page state after clicking/submitting (see next section)
 - **Clean up listeners**: call `page.removeAllListeners()` at end of message to prevent leaks
 - **CDP sessions**: use `getCDPSession({ page })` not `page.context().newCDPSession()` - the latter doesn't work through playwriter relay
-- **Wait for load**: use `page.waitForLoadState('load')` not `page.waitForEvent('load')` - waitForEvent times out if already loaded
+- **Wait for load**: use `page.waitForLoadState('domcontentloaded')` not `page.waitForEvent('load')` - waitForEvent times out if already loaded
 - **Avoid timeouts**: prefer proper waits over `page.waitForTimeout()` - there are better ways to wait for elements
 
 ## checking page state
@@ -134,6 +134,15 @@ Create new page:
 ```js
 state.newPage = await context.newPage();
 await state.newPage.goto('https://example.com');
+```
+
+## navigation
+
+**Use `domcontentloaded`** for `page.goto()`:
+
+```js
+await page.goto('https://example.com', { waitUntil: 'domcontentloaded' });
+await waitForPageLoad({ page, timeout: 5000 });
 ```
 
 ## common patterns

@@ -511,7 +511,7 @@ async function getCurrentPage(timeout = 5000) {
 
       if (pages.length > 0) {
         const page = pages[0]
-        await page.waitForLoadState('load', { timeout }).catch(() => {})
+        await page.waitForLoadState('domcontentloaded', { timeout }).catch(() => {})
         return page
       }
     }
