@@ -2,6 +2,7 @@ import WebSocket from 'ws'
 import type { Page } from 'playwright-core'
 import type { ProtocolMapping } from 'devtools-protocol/types/protocol-mapping.js'
 import type { CDPResponseBase, CDPEventBase } from './cdp-types.js'
+import { getCdpUrl } from './utils.js'
 
 /**
  * Common interface for CDP sessions that works with both our CDPSession
@@ -162,8 +163,9 @@ export class CDPSession implements ICDPSession {
   }
 }
 
-export async function getCDPSessionForPage({ page, wsUrl }: { page: Page; wsUrl: string }): Promise<CDPSession> {
-  const ws = new WebSocket(wsUrl)
+export async function getCDPSessionForPage({ page, wsUrl }: { page: Page; wsUrl?: string }): Promise<CDPSession> {
+  const resolvedWsUrl = wsUrl || getCdpUrl()
+  const ws = new WebSocket(resolvedWsUrl)
 
   await new Promise<void>((resolve, reject) => {
     ws.on('open', resolve)
