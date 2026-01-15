@@ -6,7 +6,7 @@ import type { WSContext } from 'hono/ws'
 import type { Protocol } from './cdp-types.js'
 import type { CDPCommand, CDPResponseBase, CDPEventBase, CDPEventFor, RelayServerEvents } from './cdp-types.js'
 import type { ExtensionMessage, ExtensionEventMessage } from './protocol.js'
-import chalk from 'chalk'
+import pc from 'picocolors'
 import { EventEmitter } from 'node:events'
 import { VERSION } from './utils.js'
 
@@ -150,17 +150,17 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
       }
     }
 
-    const detailsStr = details.length > 0 ? ` ${chalk.gray(details.join(', '))}` : ''
+    const detailsStr = details.length > 0 ? ` ${pc.gray(details.join(', '))}` : ''
 
     if (direction === 'from-playwright') {
-      const clientLabel = clientId ? chalk.blue(`[${clientId}]`) : ''
-      logger?.log(chalk.cyan('← Playwright'), clientLabel + ':', method + detailsStr)
+      const clientLabel = clientId ? pc.blue(`[${clientId}]`) : ''
+      logger?.log(pc.cyan('← Playwright'), clientLabel + ':', method + detailsStr)
     } else if (direction === 'from-extension') {
-      logger?.log(chalk.yellow('← Extension:'), method + detailsStr)
+      logger?.log(pc.yellow('← Extension:'), method + detailsStr)
     } else if (direction === 'to-playwright') {
-      const color = source === 'server' ? chalk.magenta : chalk.green
-      const sourceLabel = source === 'server' ? chalk.gray(' (server-generated)') : ''
-      const clientLabel = clientId ? chalk.blue(`[${clientId}]`) : chalk.blue('[ALL]')
+      const color = source === 'server' ? pc.magenta : pc.green
+      const sourceLabel = source === 'server' ? pc.gray(' (server-generated)') : ''
+      const clientLabel = clientId ? pc.blue(`[${clientId}]`) : pc.blue('[ALL]')
       logger?.log(color('→ Playwright'), clientLabel + ':', method + detailsStr + sourceLabel)
     }
   }
@@ -246,7 +246,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
     }
 
     try {
-      logger?.log(chalk.blue('Auto-creating initial tab for Playwright client'))
+      logger?.log(pc.blue('Auto-creating initial tab for Playwright client'))
       const result = await sendToExtension({ method: 'createInitialTab', timeout: 10000 }) as {
         success: boolean
         tabId: number
@@ -259,7 +259,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
           targetId: result.targetInfo.targetId,
           targetInfo: result.targetInfo
         })
-        logger?.log(chalk.blue(`Auto-created tab, now have ${connectedTargets.size} targets, url: ${result.targetInfo.url}`))
+        logger?.log(pc.blue(`Auto-created tab, now have ${connectedTargets.size} targets, url: ${result.targetInfo.url}`))
       }
     } catch (e) {
       logger?.error('Failed to auto-create initial tab:', e)
@@ -377,7 +377,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
           }
           const timeout = setTimeout(() => {
             emitter.off('cdp:event', handler)
-            logger?.log(chalk.yellow(`IMPORTANT: Runtime.enable timed out waiting for main frame executionContextCreated (sessionId: ${sessionId}). This may cause pages to not be visible immediately.`))
+            logger?.log(pc.yellow(`IMPORTANT: Runtime.enable timed out waiting for main frame executionContextCreated (sessionId: ${sessionId}). This may cause pages to not be visible immediately.`))
             resolve()
           }, 3000)
           emitter.on('cdp:event', handler)
@@ -500,7 +500,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
     try {
       const { level, args } = await c.req.json()
       const logFn = (logger as any)?.[level] || logger?.log
-      const prefix = chalk.red(`[MCP] [${level.toUpperCase()}]`)
+      const prefix = pc.red(`[MCP] [${level.toUpperCase()}]`)
       logFn?.(prefix, ...args)
       return c.json({ ok: true })
     } catch {
@@ -520,11 +520,11 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
       if (origin.startsWith('chrome-extension://')) {
         const extensionId = origin.replace('chrome-extension://', '')
         if (!OUR_EXTENSION_IDS.includes(extensionId)) {
-          logger?.log(chalk.red(`Rejecting /cdp WebSocket from unknown extension: ${extensionId}`))
+          logger?.log(pc.red(`Rejecting /cdp WebSocket from unknown extension: ${extensionId}`))
           return c.text('Forbidden', 403)
         }
       } else {
-        logger?.log(chalk.red(`Rejecting /cdp WebSocket from origin: ${origin}`))
+        logger?.log(pc.red(`Rejecting /cdp WebSocket from origin: ${origin}`))
         return c.text('Forbidden', 403)
       }
     }
@@ -543,14 +543,14 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
     return {
       async onOpen(_event, ws) {
         if (playwrightClients.has(clientId)) {
-          logger?.log(chalk.red(`Rejecting duplicate client ID: ${clientId}`))
+          logger?.log(pc.red(`Rejecting duplicate client ID: ${clientId}`))
           ws.close(1000, 'Client ID already connected')
           return
         }
 
         // Add client first so it can receive Target.attachedToTarget events
         playwrightClients.set(clientId, { id: clientId, ws })
-        logger?.log(chalk.green(`Playwright client connected: ${clientId} (${playwrightClients.size} total) (extension? ${!!extensionWs}) (${connectedTargets.size} pages)`))
+        logger?.log(pc.green(`Playwright client connected: ${clientId} (${playwrightClients.size} total) (extension? ${!!extensionWs}) (${connectedTargets.size} pages)`))
       },
 
       async onMessage(event, ws) {
@@ -607,9 +607,9 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
                 }
               } satisfies CDPEventFor<'Target.attachedToTarget'>
               if (!target.targetInfo.url) {
-                logger?.error(chalk.red('[Server] WARNING: Target.attachedToTarget sent with empty URL!'), JSON.stringify(attachedPayload))
+                logger?.error(pc.red('[Server] WARNING: Target.attachedToTarget sent with empty URL!'), JSON.stringify(attachedPayload))
               }
-              logger?.log(chalk.magenta('[Server] Target.attachedToTarget full payload:'), JSON.stringify(attachedPayload))
+              logger?.log(pc.magenta('[Server] Target.attachedToTarget full payload:'), JSON.stringify(attachedPayload))
               sendToPlaywright({
                 message: attachedPayload,
                 clientId,
@@ -634,9 +634,9 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
                 }
               } satisfies CDPEventFor<'Target.targetCreated'>
               if (!target.targetInfo.url) {
-                logger?.error(chalk.red('[Server] WARNING: Target.targetCreated sent with empty URL!'), JSON.stringify(targetCreatedPayload))
+                logger?.error(pc.red('[Server] WARNING: Target.targetCreated sent with empty URL!'), JSON.stringify(targetCreatedPayload))
               }
-              logger?.log(chalk.magenta('[Server] Target.targetCreated full payload:'), JSON.stringify(targetCreatedPayload))
+              logger?.log(pc.magenta('[Server] Target.targetCreated full payload:'), JSON.stringify(targetCreatedPayload))
               sendToPlaywright({
                 message: targetCreatedPayload,
                 clientId,
@@ -661,9 +661,9 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
                 }
               } satisfies CDPEventFor<'Target.attachedToTarget'>
               if (!target.targetInfo.url) {
-                logger?.error(chalk.red('[Server] WARNING: Target.attachedToTarget (from attachToTarget) sent with empty URL!'), JSON.stringify(attachedPayload))
+                logger?.error(pc.red('[Server] WARNING: Target.attachedToTarget (from attachToTarget) sent with empty URL!'), JSON.stringify(attachedPayload))
               }
-              logger?.log(chalk.magenta('[Server] Target.attachedToTarget (from attachToTarget) payload:'), JSON.stringify(attachedPayload))
+              logger?.log(pc.magenta('[Server] Target.attachedToTarget (from attachToTarget) payload:'), JSON.stringify(attachedPayload))
               sendToPlaywright({
                 message: attachedPayload,
                 clientId,
@@ -689,7 +689,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
 
       onClose() {
         playwrightClients.delete(clientId)
-        logger?.log(chalk.yellow(`Playwright client disconnected: ${clientId} (${playwrightClients.size} remaining)`))
+        logger?.log(pc.yellow(`Playwright client disconnected: ${clientId} (${playwrightClients.size} remaining)`))
       },
 
       onError(event) {
@@ -707,7 +707,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
     const isLocalhost = remoteAddress === '127.0.0.1' || remoteAddress === '::1'
 
     if (!isLocalhost) {
-      logger?.log(chalk.red(`Rejecting /extension WebSocket from remote IP: ${remoteAddress}`))
+      logger?.log(pc.red(`Rejecting /extension WebSocket from remote IP: ${remoteAddress}`))
       return c.text('Forbidden - Extension must be local', 403)
     }
 
@@ -716,13 +716,13 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
     // is coming from our specific Chrome Extension, not a malicious website.
     const origin = c.req.header('origin')
     if (!origin || !origin.startsWith('chrome-extension://')) {
-      logger?.log(chalk.red(`Rejecting /extension WebSocket: origin must be chrome-extension://, got: ${origin || 'none'}`))
+      logger?.log(pc.red(`Rejecting /extension WebSocket: origin must be chrome-extension://, got: ${origin || 'none'}`))
       return c.text('Forbidden', 403)
     }
     
     const extensionId = origin.replace('chrome-extension://', '')
     if (!OUR_EXTENSION_IDS.includes(extensionId)) {
-      logger?.log(chalk.red(`Rejecting /extension WebSocket from unknown extension: ${extensionId}`))
+      logger?.log(pc.red(`Rejecting /extension WebSocket from unknown extension: ${extensionId}`))
       return c.text('Forbidden', 403)
     }
 
@@ -731,7 +731,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
     return {
       onOpen(_event, ws) {
         if (extensionWs) {
-          logger?.log(chalk.yellow('Closing existing extension connection to replace with new one'))
+          logger?.log(pc.yellow('Closing existing extension connection to replace with new one'))
           extensionWs.close(4001, 'Extension Replaced')
 
           // Clear state from the old connection to prevent leaks
@@ -781,7 +781,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
         } else if (message.method === 'log') {
           const { level, args } = message.params
           const logFn = (logger as any)?.[level] || logger?.log
-          const prefix = chalk.yellow(`[Extension] [${level.toUpperCase()}]`)
+          const prefix = pc.yellow(`[Extension] [${level.toUpperCase()}]`)
           logFn?.(prefix, ...args)
         } else {
           const extensionEvent = message as ExtensionEventMessage
@@ -809,14 +809,14 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
             // These targets can't be properly controlled through chrome.debugger API
             // and cause issues when Playwright tries to initialize them (issue #14)
             if (isRestrictedTarget(targetParams.targetInfo)) {
-              logger?.log(chalk.gray(`[Server] Ignoring restricted target: ${targetParams.targetInfo.type} (${targetParams.targetInfo.url})`))
+              logger?.log(pc.gray(`[Server] Ignoring restricted target: ${targetParams.targetInfo.type} (${targetParams.targetInfo.url})`))
               return
             }
 
             if (!targetParams.targetInfo.url) {
-              logger?.error(chalk.red('[Extension] WARNING: Target.attachedToTarget received with empty URL!'), JSON.stringify({ method, params: targetParams, sessionId }))
+              logger?.error(pc.red('[Extension] WARNING: Target.attachedToTarget received with empty URL!'), JSON.stringify({ method, params: targetParams, sessionId }))
             }
-            logger?.log(chalk.yellow('[Extension] Target.attachedToTarget full payload:'), JSON.stringify({ method, params: targetParams, sessionId }))
+            logger?.log(pc.yellow('[Extension] Target.attachedToTarget full payload:'), JSON.stringify({ method, params: targetParams, sessionId }))
 
             // Check if we already sent this target to clients (e.g., from Target.setAutoAttach response)
             const alreadyConnected = connectedTargets.has(targetParams.sessionId)
@@ -854,7 +854,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
             for (const [sid, target] of connectedTargets.entries()) {
               if (target.targetId === crashParams.targetId) {
                 connectedTargets.delete(sid)
-                logger?.log(chalk.red('[Server] Target crashed, removing:'), crashParams.targetId)
+                logger?.log(pc.red('[Server] Target crashed, removing:'), crashParams.targetId)
                 break
               }
             }
@@ -892,7 +892,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
                   url: frameParams.frame.url,
                   title: frameParams.frame.name || target.targetInfo.title,
                 }
-                logger?.log(chalk.magenta('[Server] Updated target URL from Page.frameNavigated:'), frameParams.frame.url)
+                logger?.log(pc.magenta('[Server] Updated target URL from Page.frameNavigated:'), frameParams.frame.url)
               }
             }
 
@@ -913,7 +913,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
                   ...target.targetInfo,
                   url: navParams.url,
                 }
-                logger?.log(chalk.magenta('[Server] Updated target URL from Page.navigatedWithinDocument:'), navParams.url)
+                logger?.log(pc.magenta('[Server] Updated target URL from Page.navigatedWithinDocument:'), navParams.url)
               }
             }
 

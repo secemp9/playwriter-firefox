@@ -32,6 +32,7 @@
     "@types/ws": "^8.18.1",
     "@vitest/ui": "^4.0.8",
     "bippy": "^0.5.27",
+    "devtools-protocol": "^0.0.1568893",
     "image-size": "^2.0.2",
     "mcp-extension": "workspace:*",
     "vite-node": "^5.0.0",
@@ -40,22 +41,19 @@
   "dependencies": {
     "@hono/node-server": "^1.19.6",
     "@hono/node-ws": "^1.2.0",
-    "@modelcontextprotocol/sdk": "^1.21.1",
+    "@modelcontextprotocol/sdk": "^1.25.2",
     "cac": "^6.7.14",
-    "chalk": "^5.6.2",
-    "colord": "^2.9.3",
-    "devtools-protocol": "^0.0.1543509",
     "diff": "^8.0.2",
     "hono": "^4.10.6",
     "kill-port-process": "^3.2.1",
+    "picocolors": "^1.1.1",
     "playwright-core": "^1.56.1",
     "posthtml": "^0.16.7",
     "posthtml-beautify": "^0.7.0",
     "string-dedent": "^3.0.2",
     "strip-ansi": "^7.1.2",
-    "user-agents": "^1.1.669",
     "ws": "^8.18.3",
-    "zod": "^3"
+    "zod": "^4.3.5"
   },
   "optionalDependencies": {
     "sharp": "^0.34.5"
