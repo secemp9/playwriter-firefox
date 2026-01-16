@@ -4,6 +4,7 @@ import { cac } from 'cac'
 import { startPlayWriterCDPRelayServer } from './cdp-relay.js'
 import { createFileLogger } from './create-logger.js'
 import { VERSION } from './utils.js'
+import { killPortProcess } from 'kill-port-process'
 
 const RELAY_PORT = 19988
 
@@ -25,10 +26,12 @@ cli
   .command('serve', 'Start the CDP relay server for remote MCP connections')
   .option('--host <host>', 'Host to bind to', { default: '0.0.0.0' })
   .option('--token <token>', 'Authentication token (or use PLAYWRITER_TOKEN env var)')
-  .action(async (options: { host: string; token?: string }) => {
+  .option('--replace', 'Kill existing server if running')
+  .action(async (options: { host: string; token?: string; replace?: boolean }) => {
     const token = options.token || process.env.PLAYWRITER_TOKEN
-    if (!token) {
-      console.error('Error: Authentication token is required.')
+    const isPublicHost = options.host === '0.0.0.0' || options.host === '::'
+    if (isPublicHost && !token) {
+      console.error('Error: Authentication token is required when binding to a public host.')
       console.error('Provide --token <token> or set PLAYWRITER_TOKEN environment variable.')
       process.exit(1)
     }
@@ -53,8 +56,15 @@ cli
     })
 
     if (isPortInUse) {
-      console.log(`Playwriter server is already running on port ${RELAY_PORT}`)
-      process.exit(0)
+      if (!options.replace) {
+        console.log(`Playwriter server is already running on port ${RELAY_PORT}`)
+        console.log('Tip: Use --replace to kill the existing server and start a new one.')
+        process.exit(0)
+      }
+
+      // Kill existing process on the port
+      console.log(`Killing existing server on port ${RELAY_PORT}...`)
+      await killPortProcess(RELAY_PORT)
     }
 
     const logger = createFileLogger()
@@ -81,12 +91,10 @@ cli
     console.log('Playwriter CDP relay server started')
     console.log(`  Host: ${options.host}`)
     console.log(`  Port: ${RELAY_PORT}`)
-    console.log(`  Token: (configured)`)
+    console.log(`  Token: ${token ? '(configured)' : '(none)'}`)
     console.log(`  Logs: ${logger.logFilePath}`)
     console.log('')
-    console.log('Endpoints:')
-    console.log(`  Extension: ws://${options.host}:${RELAY_PORT}/extension`)
-    console.log(`  CDP:       ws://${options.host}:${RELAY_PORT}/cdp/<client-id>?token=<token>`)
+    console.log(`CDP endpoint: http://${options.host}:${RELAY_PORT}${token ? '?token=<token>' : ''}`)
     console.log('')
     console.log('Press Ctrl+C to stop.')
 
