@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.50
+
+### Bug Fixes
+
+- **Sharp fallback with viewport clipping**: When sharp is unavailable (optional dependency), screenshots now clip to max 1568px instead of relying on Claude's auto-resize
+- **Error logging for sharp failures**: Added logging when sharp import or resize fails, making it easier to debug screenshot optimization issues
+
 ## 0.0.49
 
 ### Features

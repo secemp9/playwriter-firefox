@@ -918,7 +918,11 @@ server.tool(
       const screenshotCollector: ScreenshotResult[] = []
 
       const screenshotWithAccessibilityLabelsFn = async (options: { page: Page; interactiveOnly?: boolean }) => {
-        return screenshotWithAccessibilityLabels({ ...options, collector: screenshotCollector })
+        return screenshotWithAccessibilityLabels({
+          ...options,
+          collector: screenshotCollector,
+          logger: { error: (...args) => { console.error('[playwriter]', ...args) } },
+        })
       }
 
       let vmContextObj: VMContextWithGlobals = {
@@ -1134,6 +1138,7 @@ export async function startMcp(options: { host?: string; token?: string } = {}) 
     mcpLog(`Using remote CDP relay server: ${remote.host}:${remote.port}`)
     await checkRemoteServer(remote)
   }
+
   const transport = new StdioServerTransport()
   await server.connect(transport)
 }

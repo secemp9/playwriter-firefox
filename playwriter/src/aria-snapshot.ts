@@ -2,6 +2,11 @@ import type { Page, Locator, ElementHandle } from 'playwright-core'
 import fs from 'node:fs'
 import path from 'node:path'
 
+// Import sharp at module level - resolves to null if not available
+const sharpPromise = import('sharp')
+  .then((m) => { return m.default })
+  .catch(() => { return null })
+
 export interface AriaRef {
   role: string
   name: string
@@ -558,10 +563,11 @@ export async function hideAriaRefLabels({ page }: { page: Page }): Promise<void>
  * await page.locator('aria-ref=e5').click()
  * ```
  */
-export async function screenshotWithAccessibilityLabels({ page, interactiveOnly = true, collector }: {
+export async function screenshotWithAccessibilityLabels({ page, interactiveOnly = true, collector, logger }: {
   page: Page
   interactiveOnly?: boolean
   collector: ScreenshotResult[]
+  logger?: { error: (...args: unknown[]) => void }
 }): Promise<void> {
   // Show labels and get snapshot
   const { snapshot, labelCount } = await showAriaRefLabels({ page, interactiveOnly })
@@ -581,23 +587,33 @@ export async function screenshotWithAccessibilityLabels({ page, interactiveOnly 
   // Get viewport size to clip screenshot to visible area
   const viewport = await page.evaluate('({ width: window.innerWidth, height: window.innerHeight })') as { width: number; height: number }
 
+  // Max 1568px on any edge (larger gets auto-resized by Claude, adding latency)
+  // Token formula: tokens = (width * height) / 750
+  const MAX_DIMENSION = 1568
+
+  // Check if sharp is available for resizing
+  const sharp = await sharpPromise
+
+  // Clip dimensions: if sharp unavailable, limit capture area to MAX_DIMENSION
+  const clipWidth = sharp ? viewport.width : Math.min(viewport.width, MAX_DIMENSION)
+  const clipHeight = sharp ? viewport.height : Math.min(viewport.height, MAX_DIMENSION)
+
   // Take viewport screenshot with scale: 'css' to ignore device pixel ratio
   const rawBuffer = await page.screenshot({
     type: 'jpeg',
     quality: 80,
     scale: 'css',
-    clip: { x: 0, y: 0, width: viewport.width, height: viewport.height },
+    clip: { x: 0, y: 0, width: clipWidth, height: clipHeight },
   })
 
-  // Resize to fit within Claude's optimal limits:
-  // - Max 1568px on any edge (larger gets auto-resized by Claude, adding latency)
-  // - Target ~1.15 megapixels for optimal token usage (~1,533 tokens)
-  // Token formula: tokens = (width * height) / 750
-  const buffer = await Promise.resolve()
-    .then(() => import('sharp'))
-    .then(async ({ default: sharp }) => {
-      const MAX_DIMENSION = 1568
-      return sharp(rawBuffer)
+  // Resize with sharp if available, otherwise use clipped raw buffer
+  const buffer = await (async () => {
+    if (!sharp) {
+      logger?.error('[playwriter] sharp not available, using clipped screenshot (max', MAX_DIMENSION, 'px)')
+      return rawBuffer
+    }
+    try {
+      return await sharp(rawBuffer)
         .resize({
           width: MAX_DIMENSION,
           height: MAX_DIMENSION,
@@ -606,8 +622,11 @@ export async function screenshotWithAccessibilityLabels({ page, interactiveOnly 
         })
         .jpeg({ quality: 80 })
         .toBuffer()
-    })
-    .catch(() => rawBuffer) // sharp not available, Claude will auto-resize
+    } catch (err) {
+      logger?.error('[playwriter] sharp resize failed, using raw buffer:', err)
+      return rawBuffer
+    }
+  })()
 
   // Save to file
   fs.writeFileSync(screenshotPath, buffer)

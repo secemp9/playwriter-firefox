@@ -47,7 +47,14 @@
    }
    ```
 
-   Restart your MCP client and you're ready to go! Your AI assistant can now control the browser through the extension.
+Or use the following command to automatically add the MCP setting for your client:
+
+```sh
+npx -y install-mcp playwriter # pass `--client claude` or `--client opencode` for the client you want to use
+
+```
+
+Restart your MCP client and you're ready to go! Your AI assistant can now control the browser through the extension.
 
 ## Usage
 
@@ -161,11 +168,11 @@ When set, the MCP will automatically create an initial tab when a Playwright cli
 {
   "mcpServers": {
     "playwriter": {
-"command": "npx",
-        "args": ["-y", "playwriter@latest"],
-        "env": {
-          "PLAYWRITER_AUTO_ENABLE": "1"
-        }
+      "command": "npx",
+      "args": ["-y", "playwriter@latest"],
+      "env": {
+        "PLAYWRITER_AUTO_ENABLE": "1"
+      }
     }
   }
 }
@@ -359,8 +366,8 @@ Configure your MCP client with the host and token. You can pass them as CLI argu
 {
   "mcpServers": {
     "playwriter": {
-"command": "npx",
-        "args": ["-y", "playwriter@latest", "--host", "host.docker.internal", "--token", "<secret>"]
+      "command": "npx",
+      "args": ["-y", "playwriter@latest", "--host", "host.docker.internal", "--token", "<secret>"]
     }
   }
 }
@@ -372,12 +379,12 @@ Or use environment variables (useful if you want to set them globally in your pr
 {
   "mcpServers": {
     "playwriter": {
-"command": "npx",
-        "args": ["-y", "playwriter@latest"],
-        "env": {
-          "PLAYWRITER_HOST": "host.docker.internal",
-          "PLAYWRITER_TOKEN": "<secret>"
-        }
+      "command": "npx",
+      "args": ["-y", "playwriter@latest"],
+      "env": {
+        "PLAYWRITER_HOST": "host.docker.internal",
+        "PLAYWRITER_TOKEN": "<secret>"
+      }
     }
   }
 }
