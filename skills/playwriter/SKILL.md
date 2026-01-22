@@ -3,6 +3,52 @@ name: playwriter
 description: Control Chrome browser via Playwright code snippets. Automate web interactions, take screenshots, inspect accessibility trees, and debug web applications.
 ---
 
+## CLI Usage
+
+If `playwriter` command is not found, install globally or use npx/bunx:
+
+```bash
+npm install -g playwriter
+# or use without installing:
+npx playwriter -e "..." -s 1
+bunx playwriter -e "..." -s 1
+```
+
+### Execute code
+
+```bash
+playwriter -e "<code>" -s <session>
+```
+
+The `-s` flag specifies a session name (required). Use the same session to persist state across commands.
+
+**Examples:**
+
+```bash
+# Navigate to a page
+playwriter -e "await page.goto('https://example.com')" -s 1
+
+# Click a button
+playwriter -e "await page.click('button')" -s 1
+
+# Get page title
+playwriter -e "console.log(await page.title())" -s 1
+
+# Take a screenshot
+playwriter -e "await page.screenshot({ path: 'screenshot.png', scale: 'css' })" -s 1
+
+# Get accessibility snapshot
+playwriter -e "console.log(await accessibilitySnapshot({ page }))" -s 1
+```
+
+### Reset connection
+
+If the browser connection is stale or broken:
+
+```bash
+playwriter reset -s <session>
+```
+
 # playwriter execute
 
 Control user's Chrome browser via playwright code snippets. Prefer single-line code with semicolons between statements. If you get "Extension not running" error, tell user to click the playwriter extension icon on the tab they want to control.
