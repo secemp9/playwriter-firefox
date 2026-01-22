@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 
 import { cac } from 'cac'
-import { startPlayWriterCDPRelayServer } from './cdp-relay.js'
-import { createFileLogger } from './create-logger.js'
-import { VERSION } from './utils.js'
+import { VERSION, LOG_FILE_PATH } from './utils.js'
 import { ensureRelayServer, RELAY_PORT } from './relay-client.js'
-import { killPortProcess } from 'kill-port-process'
 
 const cli = cac('playwriter')
 
@@ -109,7 +106,9 @@ async function executeCode(options: {
     }
   } catch (error: any) {
     if (error.cause?.code === 'ECONNREFUSED') {
-      console.error('Error: Cannot connect to relay server. Make sure the Playwriter extension is running.')
+      console.error('Error: Cannot connect to relay server.')
+      console.error('The Playwriter relay server should start automatically. Check logs at:')
+      console.error(`  ${LOG_FILE_PATH}`)
     } else {
       console.error(`Error: ${error.message}`)
     }
@@ -206,9 +205,14 @@ cli
 
       // Kill existing process on the port
       console.log(`Killing existing server on port ${RELAY_PORT}...`)
+      const { killPortProcess } = await import('kill-port-process')
       await killPortProcess(RELAY_PORT)
     }
 
+    // Lazy-load heavy dependencies only when serve command is used
+    const { createFileLogger } = await import('./create-logger.js')
+    const { startPlayWriterCDPRelayServer } = await import('./cdp-relay.js')
+    
     const logger = createFileLogger()
 
     process.title = 'playwriter-serve'
