@@ -24,6 +24,7 @@ import { ScopedFS } from './scoped-fs.js'
 import { screenshotWithAccessibilityLabels, formatSnapshot, DEFAULT_SNAPSHOT_FORMAT, type ScreenshotResult, type SnapshotFormat } from './aria-snapshot.js'
 export type { SnapshotFormat }
 import { getCleanHTML, type GetCleanHTMLOptions } from './clean-html.js'
+import { startRecording, stopRecording, isRecording, cancelRecording } from './screen-recording.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -589,6 +590,35 @@ export class PlaywrightExecutor {
         })
       }
 
+      // Screen recording functions (via chrome.tabCapture in extension - survives navigation)
+      const relayPort = this.cdpConfig.port || 19988
+
+      const startRecordingFn = async (options: {
+        page?: Page
+        frameRate?: number
+        videoBitsPerSecond?: number
+        audioBitsPerSecond?: number
+        audio?: boolean
+        outputPath: string
+      }) => {
+        return startRecording({
+          page: options.page || page,
+          relayPort,
+          ...options
+        })
+      }
+
+      const stopRecordingFn = async (options: { page?: Page } = {}) => {
+        return stopRecording({ page: options.page || page, relayPort })
+      }
+
+      const isRecordingFn = async (options: { page?: Page } = {}) => {
+        return isRecording({ page: options.page || page, relayPort })
+      }
+
+      const cancelRecordingFn = async (options: { page?: Page } = {}) => {
+        return cancelRecording({ page: options.page || page, relayPort })
+      }
       const self = this
 
       let vmContextObj: any = {
@@ -609,6 +639,10 @@ export class PlaywrightExecutor {
         formatStylesAsText,
         getReactSource: getReactSourceFn,
         screenshotWithAccessibilityLabels: screenshotWithAccessibilityLabelsFn,
+        startRecording: startRecordingFn,
+        stopRecording: stopRecordingFn,
+        isRecording: isRecordingFn,
+        cancelRecording: cancelRecordingFn,
         resetPlaywright: async () => {
           const { page: newPage, context: newContext } = await self.reset()
           vmContextObj.page = newPage

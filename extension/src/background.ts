@@ -1,7 +1,7 @@
 declare const process: { env: { PLAYWRITER_PORT: string } }
 
 import { createStore } from 'zustand/vanilla'
-import type { ExtensionState, ConnectionState, TabState, TabInfo } from './types'
+import type { ExtensionState, ConnectionState, TabState, TabInfo, RecordingInfo } from './types'
 import type { CDPEvent, Protocol } from 'playwriter/src/cdp-types'
 import type { ExtensionCommandMessage, ExtensionResponseMessage } from 'playwriter/src/protocol'
 
@@ -15,6 +15,9 @@ function sleep(ms: number): Promise<void> {
 let childSessions: Map<string, { tabId: number; targetId?: string }> = new Map()
 let nextSessionId = 1
 let tabGroupQueue: Promise<void> = Promise.resolve()
+
+// Active recordings - kept outside store since MediaRecorder/MediaStream can't be serialized
+const activeRecordings: Map<number, RecordingInfo> = new Map()
 
 class ConnectionManager {
   ws: WebSocket | null = null
@@ -172,6 +175,51 @@ class ConnectionManager {
         } catch (error: any) {
           logger.debug('Failed to create initial tab:', error)
           sendMessage({ id: message.id, error: error.message })
+        }
+        return
+      }
+
+      // Handle recording commands
+      if (message.method === 'startRecording') {
+        try {
+          const result = await handleStartRecording(message.params)
+          sendMessage({ id: message.id, result })
+        } catch (error: any) {
+          logger.error('Failed to start recording:', error)
+          sendMessage({ id: message.id, result: { success: false, error: error.message } })
+        }
+        return
+      }
+
+      if (message.method === 'stopRecording') {
+        try {
+          const result = await handleStopRecording(message.params)
+          sendMessage({ id: message.id, result })
+        } catch (error: any) {
+          logger.error('Failed to stop recording:', error)
+          sendMessage({ id: message.id, result: { success: false, error: error.message } })
+        }
+        return
+      }
+
+      if (message.method === 'isRecording') {
+        try {
+          const result = handleIsRecording(message.params)
+          sendMessage({ id: message.id, result })
+        } catch (error: any) {
+          logger.error('Failed to check recording status:', error)
+          sendMessage({ id: message.id, result: { isRecording: false } })
+        }
+        return
+      }
+
+      if (message.method === 'cancelRecording') {
+        try {
+          const result = handleCancelRecording(message.params)
+          sendMessage({ id: message.id, result })
+        } catch (error: any) {
+          logger.error('Failed to cancel recording:', error)
+          sendMessage({ id: message.id, result: { success: false, error: error.message } })
         }
         return
       }
@@ -845,6 +893,9 @@ function detachTab(tabId: number, shouldDetachDebugger: boolean): void {
     return
   }
 
+  // Clean up any active recording for this tab
+  cleanupRecordingForTab(tabId)
+
   logger.warn(`DISCONNECT: detachTab tabId=${tabId} shouldDetach=${shouldDetachDebugger} stack=${getCallStack()}`)
 
   // Only send detach event if tab was fully attached (has sessionId/targetId)
@@ -984,6 +1035,308 @@ async function disconnectEverything(): Promise<void> {
   await tabGroupQueue
   // WS connection is maintained - maintainConnection handles it
 }
+
+// ============= Recording Functions =============
+
+function resolveTabIdFromSessionId(sessionId?: string): number | undefined {
+  if (!sessionId) {
+    // Return the first connected tab
+    for (const [tabId, tab] of store.getState().tabs) {
+      if (tab.state === 'connected') {
+        return tabId
+      }
+    }
+    return undefined
+  }
+  
+  const found = getTabBySessionId(sessionId)
+  return found?.tabId
+}
+
+interface StartRecordingParams {
+  sessionId?: string
+  frameRate?: number
+  audio?: boolean
+  videoBitsPerSecond?: number
+  audioBitsPerSecond?: number
+}
+
+async function handleStartRecording(params: StartRecordingParams): Promise<{ success: true; tabId: number; startedAt: number } | { success: false; error: string }> {
+  const tabId = resolveTabIdFromSessionId(params.sessionId)
+  if (!tabId) {
+    return { success: false, error: 'No connected tab found for recording' }
+  }
+
+  if (activeRecordings.has(tabId)) {
+    return { success: false, error: 'Recording already in progress for this tab' }
+  }
+
+  const tabInfo = store.getState().tabs.get(tabId)
+  if (!tabInfo || tabInfo.state !== 'connected') {
+    return { success: false, error: 'Tab is not connected' }
+  }
+
+  logger.debug('Starting recording for tab:', tabId, 'params:', params)
+
+  try {
+    // Use chrome.tabCapture to capture the tab
+    const stream = await new Promise<MediaStream>((resolve, reject) => {
+      chrome.tabCapture.capture(
+        {
+          audio: params.audio ?? false,
+          video: true,
+          videoConstraints: {
+            mandatory: {
+              minFrameRate: params.frameRate ?? 30,
+              maxFrameRate: params.frameRate ?? 30,
+            },
+          },
+        },
+        (capturedStream) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message))
+          } else if (!capturedStream) {
+            reject(new Error('Failed to capture tab - no stream returned'))
+          } else {
+            resolve(capturedStream)
+          }
+        }
+      )
+    })
+
+    // Determine best codec
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus'
+      : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+        ? 'video/webm;codecs=vp8,opus'
+        : 'video/webm'
+
+    const recorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: params.videoBitsPerSecond ?? 2500000,
+      audioBitsPerSecond: params.audioBitsPerSecond ?? 128000,
+    })
+
+    const startedAt = Date.now()
+
+    // Store recording info
+    const recordingInfo: RecordingInfo = {
+      tabId,
+      startedAt,
+      recorder,
+      stream,
+      mimeType,
+    }
+    activeRecordings.set(tabId, recordingInfo)
+
+    // Update tab state
+    store.setState((state) => {
+      const newTabs = new Map(state.tabs)
+      const existing = newTabs.get(tabId)
+      if (existing) {
+        newTabs.set(tabId, { ...existing, isRecording: true })
+      }
+      return { tabs: newTabs }
+    })
+
+    // Send binary chunks as they become available
+    recorder.ondataavailable = async (event) => {
+      if (event.data.size > 0 && connectionManager.ws?.readyState === WebSocket.OPEN) {
+        try {
+          // Send metadata message first
+          sendMessage({
+            method: 'recordingData',
+            params: { tabId },
+          })
+          // Then send binary data
+          const arrayBuffer = await event.data.arrayBuffer()
+          connectionManager.ws.send(arrayBuffer)
+        } catch (error: any) {
+          logger.error('Failed to send recording chunk:', error.message)
+        }
+      }
+    }
+
+    recorder.onerror = (event: any) => {
+      logger.error('MediaRecorder error:', event.error?.message || 'Unknown error')
+      handleCancelRecording({ sessionId: params.sessionId })
+    }
+
+    recorder.onstop = () => {
+      logger.debug('MediaRecorder stopped for tab:', tabId)
+      // Stream tracks are stopped in handleStopRecording
+    }
+
+    // Start recording with 1 second chunks
+    recorder.start(1000)
+    logger.debug('Recording started for tab:', tabId, 'mimeType:', mimeType)
+
+    return { success: true, tabId, startedAt }
+  } catch (error: any) {
+    logger.error('Failed to start recording:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+interface StopRecordingParams {
+  sessionId?: string
+}
+
+async function handleStopRecording(params: StopRecordingParams): Promise<{ success: true; tabId: number; duration: number } | { success: false; error: string }> {
+  const tabId = resolveTabIdFromSessionId(params.sessionId)
+  if (!tabId) {
+    return { success: false, error: 'No connected tab found' }
+  }
+
+  const recording = activeRecordings.get(tabId)
+  if (!recording) {
+    return { success: false, error: 'No active recording for this tab' }
+  }
+
+  logger.debug('Stopping recording for tab:', tabId)
+
+  try {
+    const { recorder, stream, startedAt } = recording
+
+    // Wait for recorder to finish
+    await new Promise<void>((resolve) => {
+      const originalOnStop = recorder.onstop
+      recorder.onstop = (event: Event) => {
+        if (originalOnStop) {
+          originalOnStop.call(recorder, event)
+        }
+        resolve()
+      }
+      
+      if (recorder.state !== 'inactive') {
+        recorder.stop()
+      } else {
+        resolve()
+      }
+    })
+
+    // Stop all tracks
+    stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
+
+    // Send final marker
+    if (connectionManager.ws?.readyState === WebSocket.OPEN) {
+      sendMessage({
+        method: 'recordingData',
+        params: { tabId, final: true },
+      })
+    }
+
+    const duration = Date.now() - startedAt
+
+    // Clean up
+    activeRecordings.delete(tabId)
+    store.setState((state) => {
+      const newTabs = new Map(state.tabs)
+      const existing = newTabs.get(tabId)
+      if (existing) {
+        newTabs.set(tabId, { ...existing, isRecording: false })
+      }
+      return { tabs: newTabs }
+    })
+
+    logger.debug('Recording stopped for tab:', tabId, 'duration:', duration)
+    return { success: true, tabId, duration }
+  } catch (error: any) {
+    logger.error('Failed to stop recording:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+interface IsRecordingParams {
+  sessionId?: string
+}
+
+function handleIsRecording(params: IsRecordingParams): { isRecording: boolean; tabId?: number; startedAt?: number } {
+  const tabId = resolveTabIdFromSessionId(params.sessionId)
+  if (!tabId) {
+    return { isRecording: false }
+  }
+
+  const recording = activeRecordings.get(tabId)
+  if (!recording) {
+    return { isRecording: false, tabId }
+  }
+
+  return {
+    isRecording: recording.recorder.state === 'recording',
+    tabId,
+    startedAt: recording.startedAt,
+  }
+}
+
+interface CancelRecordingParams {
+  sessionId?: string
+}
+
+function handleCancelRecording(params: CancelRecordingParams): { success: boolean; error?: string } {
+  const tabId = resolveTabIdFromSessionId(params.sessionId)
+  if (!tabId) {
+    return { success: false, error: 'No connected tab found' }
+  }
+
+  const recording = activeRecordings.get(tabId)
+  if (!recording) {
+    return { success: true } // Already not recording
+  }
+
+  logger.debug('Cancelling recording for tab:', tabId)
+
+  try {
+    const { recorder, stream } = recording
+
+    if (recorder.state !== 'inactive') {
+      recorder.stop()
+    }
+    stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
+
+    activeRecordings.delete(tabId)
+    store.setState((state) => {
+      const newTabs = new Map(state.tabs)
+      const existing = newTabs.get(tabId)
+      if (existing) {
+        newTabs.set(tabId, { ...existing, isRecording: false })
+      }
+      return { tabs: newTabs }
+    })
+
+    // Send cancel marker
+    if (connectionManager.ws?.readyState === WebSocket.OPEN) {
+      sendMessage({
+        method: 'recordingCancelled',
+        params: { tabId },
+      })
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    logger.error('Failed to cancel recording:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Clean up recordings when tab is disconnected
+function cleanupRecordingForTab(tabId: number): void {
+  const recording = activeRecordings.get(tabId)
+  if (recording) {
+    logger.debug('Cleaning up recording for disconnected tab:', tabId)
+    try {
+      if (recording.recorder.state !== 'inactive') {
+        recording.recorder.stop()
+      }
+      recording.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
+    } catch (e) {
+      logger.debug('Error cleaning up recording:', e)
+    }
+    activeRecordings.delete(tabId)
+  }
+}
+
+// ============= End Recording Functions =============
 
 async function resetDebugger(): Promise<void> {
   let targets = await chrome.debugger.getTargets()

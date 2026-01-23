@@ -61,4 +61,104 @@ export type ServerPingMessage = {
   id?: undefined
 }
 
-export type ExtensionMessage = ExtensionResponseMessage | ExtensionEventMessage | ExtensionLogMessage | ExtensionPongMessage
+export type RecordingDataMessage = {
+  id?: undefined
+  method: 'recordingData'
+  params: {
+    tabId: number
+    final?: boolean
+  }
+}
+
+export type RecordingCancelledMessage = {
+  id?: undefined
+  method: 'recordingCancelled'
+  params: {
+    tabId: number
+  }
+}
+
+export type ExtensionMessage = ExtensionResponseMessage | ExtensionEventMessage | ExtensionLogMessage | ExtensionPongMessage | RecordingDataMessage | RecordingCancelledMessage
+
+// Recording command messages (MCP -> Extension via relay)
+export type StartRecordingParams = {
+  sessionId?: string
+  frameRate?: number
+  audio?: boolean
+  videoBitsPerSecond?: number
+  audioBitsPerSecond?: number
+}
+
+export type StopRecordingParams = {
+  sessionId?: string
+}
+
+export type IsRecordingParams = {
+  sessionId?: string
+}
+
+export type CancelRecordingParams = {
+  sessionId?: string
+}
+
+export type StartRecordingMessage = {
+  id: number
+  method: 'startRecording'
+  params: StartRecordingParams
+}
+
+export type StopRecordingMessage = {
+  id: number
+  method: 'stopRecording'
+  params: StopRecordingParams
+}
+
+export type IsRecordingMessage = {
+  id: number
+  method: 'isRecording'
+  params: IsRecordingParams
+}
+
+export type CancelRecordingMessage = {
+  id: number
+  method: 'cancelRecording'
+  params: CancelRecordingParams
+}
+
+export type RecordingCommandMessage =
+  | StartRecordingMessage
+  | StopRecordingMessage
+  | IsRecordingMessage
+  | CancelRecordingMessage
+
+// Recording result types
+export type StartRecordingResult = {
+  success: true
+  tabId: number
+  startedAt: number
+} | {
+  success: false
+  error: string
+}
+
+export type StopRecordingResult = {
+  success: true
+  tabId: number
+  duration: number
+  path: string
+  size: number
+} | {
+  success: false
+  error: string
+}
+
+export type IsRecordingResult = {
+  isRecording: boolean
+  tabId?: number
+  startedAt?: number
+}
+
+export type CancelRecordingResult = {
+  success: boolean
+  error?: string
+}
