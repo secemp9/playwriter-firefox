@@ -89,6 +89,11 @@ export type StartRecordingParams = {
   audioBitsPerSecond?: number
 }
 
+/** HTTP body for /recording/start endpoint */
+export type StartRecordingBody = StartRecordingParams & {
+  outputPath: string
+}
+
 export type StopRecordingParams = {
   sessionId?: string
 }

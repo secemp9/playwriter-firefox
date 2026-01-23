@@ -6,7 +6,15 @@
  */
 
 import type { Page } from 'playwright-core'
-import type { StartRecordingResult, StopRecordingResult, IsRecordingResult, CancelRecordingResult } from './protocol.js'
+import type {
+  StartRecordingBody,
+  StopRecordingParams,
+  CancelRecordingParams,
+  StartRecordingResult,
+  StopRecordingResult,
+  IsRecordingResult,
+  CancelRecordingResult,
+} from './protocol.js'
 
 export interface StartRecordingOptions {
   /** Target page to record */
@@ -72,7 +80,7 @@ export async function startRecording(options: StartRecordingOptions): Promise<Re
       audioBitsPerSecond,
       audio,
       outputPath,
-    }),
+    } satisfies StartRecordingBody),
   })
 
   const result = await response.json() as StartRecordingResult
@@ -100,7 +108,7 @@ export async function stopRecording(options: StopRecordingOptions): Promise<{ pa
   const response = await fetch(`http://127.0.0.1:${relayPort}/recording/stop`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId }),
+    body: JSON.stringify({ sessionId } satisfies StopRecordingParams),
   })
 
   const result = await response.json() as StopRecordingResult
@@ -145,7 +153,7 @@ export async function cancelRecording(options: { page: Page; relayPort?: number 
   const response = await fetch(`http://127.0.0.1:${relayPort}/recording/cancel`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId }),
+    body: JSON.stringify({ sessionId } satisfies CancelRecordingParams),
   })
 
   const result = await response.json() as CancelRecordingResult
