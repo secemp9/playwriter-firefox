@@ -2616,19 +2616,19 @@ describe('MCP Server Tests', () => {
         await page.close()
     }, 60000)
 
-    it('should record screen with navigation using chrome.tabCapture', async () => {
-        // chrome.tabCapture.getMediaStreamId() requires activeTab permission,
-        // which Chrome only grants through actual user gestures (clicking extension icon).
-        // This test verifies the code paths work; actual recording requires user interaction.
-
+    // Skip: chrome.tabCapture.getMediaStreamId() requires activeTab permission,
+    // which Chrome only grants through actual user gestures (clicking extension icon).
+    // To run manually: remove .skip, click extension icon on the tab, then run test.
+    it.skip('should record screen with navigation using chrome.tabCapture', async () => {
         const browserContext = getBrowserContext()
         const serviceWorker = await getExtensionServiceWorker(browserContext)
 
         // Create a page with extension enabled
         const recordingPage = await browserContext.newPage()
-        await recordingPage.goto('https://example.com/', { waitUntil: 'domcontentloaded' })
+        await recordingPage.goto('https://news.ycombinator.com/', { waitUntil: 'domcontentloaded' })
         await recordingPage.bringToFront()
         
+        // Enable extension on this tab (user must click extension icon for activeTab)
         await serviceWorker.evaluate(async () => {
             await globalThis.toggleExtensionForActiveTab()
         })
@@ -2639,24 +2639,41 @@ describe('MCP Server Tests', () => {
             fs.mkdirSync(path.dirname(outputPath), { recursive: true })
         }
 
-        const { startRecording } = await import('./screen-recording.js')
+        const { startRecording, stopRecording, isRecording } = await import('./screen-recording.js')
         
-        try {
-            await startRecording({
-                page: recordingPage,
-                outputPath,
-                relayPort: TEST_PORT,
-            })
-            // If we get here, recording started (unlikely without user gesture)
-            console.log('Recording started successfully')
-        } catch (error: any) {
-            // Expected: activeTab not granted without user clicking extension icon
-            expect(error.message).toContain('not been invoked')
-            console.log('Expected error: activeTab requires user gesture')
-        }
+        // Start recording
+        const startResult = await startRecording({
+            page: recordingPage,
+            outputPath,
+            frameRate: 30,
+            audio: false,
+            videoBitsPerSecond: 1500000,
+            relayPort: TEST_PORT,
+        })
+        expect(startResult.isRecording).toBe(true)
 
+        // Navigate - recording should survive
+        await recordingPage.locator('.titleline a').first().click()
+        await recordingPage.waitForLoadState('domcontentloaded')
+        await new Promise(r => setTimeout(r, 500))
+        
+        await recordingPage.goBack()
+        await recordingPage.waitForLoadState('domcontentloaded')
+
+        // Verify still recording after navigation
+        const status = await isRecording({ page: recordingPage, relayPort: TEST_PORT })
+        expect(status.isRecording).toBe(true)
+
+        // Stop and verify output
+        const stopResult = await stopRecording({ page: recordingPage, relayPort: TEST_PORT })
+        expect(stopResult.path).toBe(outputPath)
+        expect(stopResult.size).toBeGreaterThan(10000)
+        expect(fs.existsSync(outputPath)).toBe(true)
+
+        // Cleanup
         await recordingPage.close()
-    }, 30000)
+        fs.unlinkSync(outputPath)
+    }, 60000)
 
 })
 
