@@ -418,6 +418,8 @@ Always use `scale: 'css'` to avoid 2-4x larger images on high-DPI displays:
 await page.screenshot({ path: 'shot.png', scale: 'css' });
 ```
 
+If you want to read back the image file into context make sure to resize it first, scaling down the image to make sure max size is 1500px. for example with `sips --resampleHeightWidthMax 1500 input.png --out output.png` on macOS
+
 ## page.evaluate
 
 Code inside `page.evaluate()` runs in the browser - use plain JavaScript only, no TypeScript syntax. Return values and log outside (console.log inside evaluate runs in browser, not visible):
