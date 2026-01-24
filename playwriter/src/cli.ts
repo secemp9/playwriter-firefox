@@ -14,13 +14,13 @@ cli
   .option('--token <token>', 'Authentication token (or use PLAYWRITER_TOKEN env var)')
   .option('-s, --session <name>', 'Session ID (required for -e, get one with `playwriter session new`)')
   .option('-e, --eval <code>', 'Execute JavaScript code and exit, read https://playwriter.dev/SKILL.md for usage')
-  .option('--timeout <ms>', 'Execution timeout in milliseconds', { default: 5000 })
+  .option('--timeout <ms>', 'Execution timeout in milliseconds', { default: 10000 })
   .action(async (options: { host?: string; token?: string; eval?: string; timeout?: number; session?: string }) => {
     // If -e flag is provided, execute code via relay server
     if (options.eval) {
       await executeCode({
         code: options.eval,
-        timeout: options.timeout || 5000,
+        timeout: options.timeout || 10000,
         sessionId: options.session,
         host: options.host,
         token: options.token,

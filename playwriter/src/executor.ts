@@ -291,7 +291,7 @@ export class PlaywrightExecutor {
     return { browser, page }
   }
   
-  private async getCurrentPage(timeout = 5000): Promise<Page> {
+  private async getCurrentPage(timeout = 10000): Promise<Page> {
     if (this.page && !this.page.isClosed()) {
       return this.page
     }
@@ -365,7 +365,7 @@ export class PlaywrightExecutor {
     return { page, context }
   }
   
-  async execute(code: string, timeout = 5000): Promise<ExecuteResult> {
+  async execute(code: string, timeout = 10000): Promise<ExecuteResult> {
     const consoleLogs: Array<{ method: string; args: any[] }> = []
     
     const formatConsoleLogs = (logs: Array<{ method: string; args: any[] }>, prefix = 'Console output') => {

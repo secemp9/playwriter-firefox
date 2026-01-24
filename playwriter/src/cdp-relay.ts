@@ -1065,7 +1065,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
   app.post('/cli/execute', async (c) => {
     try {
       const body = await c.req.json() as { sessionId: string; code: string; timeout?: number; cwd?: string }
-      const { sessionId, code, timeout = 5000, cwd } = body
+      const { sessionId, code, timeout = 10000, cwd } = body
       
       if (!sessionId || !code) {
         return c.json({ error: 'sessionId and code are required' }, 400)
