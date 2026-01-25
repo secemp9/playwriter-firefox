@@ -264,11 +264,11 @@ export async function startPlayWriterCDPRelayServer({
   }
 
   // Recording relay for screen recording functionality
-  const recordingRelay = new RecordingRelay({
+  const recordingRelay = new RecordingRelay(
     sendToExtension,
-    isExtensionConnected: () => extensionWs !== null,
+    () => extensionWs !== null,
     logger,
-  })
+  )
 
   // Auto-create initial tab when PLAYWRITER_AUTO_ENABLE is set and no targets exist.
   // This allows Playwright to connect and immediately have a page to work with.

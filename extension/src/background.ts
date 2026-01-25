@@ -5,7 +5,6 @@ import type { ExtensionState, ConnectionState, TabState, TabInfo } from './types
 import type { CDPEvent, Protocol } from 'playwriter/src/cdp-types'
 import type { ExtensionCommandMessage, ExtensionResponseMessage } from 'playwriter/src/protocol'
 import {
-  initRecording,
   getActiveRecordings,
   handleStartRecording,
   handleStopRecording,
@@ -412,9 +411,9 @@ class ConnectionManager {
   }
 }
 
-const connectionManager = new ConnectionManager()
+export const connectionManager = new ConnectionManager()
 
-const store = createStore<ExtensionState>(() => ({
+export const store = createStore<ExtensionState>(() => ({
   tabs: new Map(),
   connectionState: 'idle',
   currentTabId: undefined,
@@ -477,7 +476,7 @@ function sendLog(level: string, args: any[]) {
   })
 }
 
-const logger = {
+export const logger = {
   log: (...args: any[]) => {
     console.log(...args)
     sendLog('log', args)
@@ -518,7 +517,7 @@ self.addEventListener('unhandledrejection', (event) => {
 })
 
 let messageCount = 0
-function sendMessage(message: any): void {
+export function sendMessage(message: any): void {
   if (connectionManager.ws?.readyState === WebSocket.OPEN) {
     try {
       connectionManager.ws.send(JSON.stringify(message))
@@ -602,7 +601,7 @@ async function syncTabGroup(): Promise<void> {
   }
 }
 
-function getTabBySessionId(sessionId: string): { tabId: number; tab: TabInfo } | undefined {
+export function getTabBySessionId(sessionId: string): { tabId: number; tab: TabInfo } | undefined {
   for (const [tabId, tab] of store.getState().tabs) {
     if (tab.sessionId === sessionId) {
       return { tabId, tab }
@@ -620,6 +619,7 @@ function getTabByTargetId(targetId: string): { tabId: number; tab: TabInfo } | u
   return undefined
 }
 
+<<<<<<< HEAD
 function emitChildDetachesForTab(tabId: number): void {
   const childEntries = Array.from(childSessions.entries())
     .filter(([_, parentTab]) => parentTab.tabId === tabId)
@@ -639,25 +639,6 @@ function emitChildDetachesForTab(tabId: number): void {
     childSessions.delete(childSessionId)
   })
 }
-
-// Initialize recording module with required dependencies
-initRecording({
-  getTabBySessionId,
-  getTabs: () => store.getState().tabs,
-  updateTabRecordingState: (tabId: number, isRecording: boolean) => {
-    store.setState((state) => {
-      const newTabs = new Map(state.tabs)
-      const existing = newTabs.get(tabId)
-      if (existing) {
-        newTabs.set(tabId, { ...existing, isRecording })
-      }
-      return { tabs: newTabs }
-    })
-  },
-  sendMessage,
-  isWebSocketOpen: () => connectionManager.ws?.readyState === WebSocket.OPEN,
-  logger,
-})
 
 async function handleCommand(msg: ExtensionCommandMessage): Promise<any> {
   if (msg.method !== 'forwardCDPCommand') return

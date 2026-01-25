@@ -3,7 +3,7 @@
  * Uses chrome.tabCapture to record tabs via an offscreen document.
  */
 
-import type { RecordingInfo, TabInfo } from './types'
+import type { RecordingInfo } from './types'
 import type {
   StartRecordingParams,
   StopRecordingParams,
@@ -19,36 +19,13 @@ import type {
   OffscreenStopRecordingResult,
   OffscreenIsRecordingResult,
 } from './offscreen-types'
-
-// Dependencies injected from background.ts
-interface RecordingDeps {
-  getTabBySessionId: (sessionId: string) => { tabId: number; tab: TabInfo } | undefined
-  getTabs: () => Map<number, TabInfo>
-  updateTabRecordingState: (tabId: number, isRecording: boolean) => void
-  sendMessage: (message: unknown) => void
-  isWebSocketOpen: () => boolean
-  logger: {
-    debug: (...args: unknown[]) => void
-    error: (...args: unknown[]) => void
-  }
-}
+import { store, connectionManager, logger, sendMessage, getTabBySessionId } from './background'
 
 // Active recordings - kept outside store since MediaRecorder/MediaStream can't be serialized
 const activeRecordings: Map<number, RecordingInfo> = new Map()
 
-// Module-level dependencies (set via initRecording)
-let deps: RecordingDeps | null = null
-
 // Offscreen document management
 let offscreenDocumentCreating: Promise<void> | null = null
-
-/**
- * Initialize the recording module with dependencies from background.ts.
- * Must be called before using any recording functions.
- */
-export function initRecording(dependencies: RecordingDeps): void {
-  deps = dependencies
-}
 
 /**
  * Get the active recordings map (for cleanup on tab disconnect).
@@ -87,13 +64,9 @@ async function ensureOffscreenDocument(): Promise<void> {
 }
 
 function resolveTabIdFromSessionId(sessionId?: string): number | undefined {
-  if (!deps) {
-    throw new Error('Recording module not initialized')
-  }
-
   if (!sessionId) {
     // Return the first connected tab
-    for (const [tabId, tab] of deps.getTabs()) {
+    for (const [tabId, tab] of store.getState().tabs) {
       if (tab.state === 'connected') {
         return tabId
       }
@@ -101,15 +74,22 @@ function resolveTabIdFromSessionId(sessionId?: string): number | undefined {
     return undefined
   }
 
-  const found = deps.getTabBySessionId(sessionId)
+  const found = getTabBySessionId(sessionId)
   return found?.tabId
 }
 
-export async function handleStartRecording(params: StartRecordingParams): Promise<StartRecordingResult> {
-  if (!deps) {
-    throw new Error('Recording module not initialized')
-  }
+function updateTabRecordingState(tabId: number, isRecording: boolean): void {
+  store.setState((state) => {
+    const newTabs = new Map(state.tabs)
+    const existing = newTabs.get(tabId)
+    if (existing) {
+      newTabs.set(tabId, { ...existing, isRecording })
+    }
+    return { tabs: newTabs }
+  })
+}
 
+export async function handleStartRecording(params: StartRecordingParams): Promise<StartRecordingResult> {
   const tabId = resolveTabIdFromSessionId(params.sessionId)
   if (!tabId) {
     return { success: false, error: 'No connected tab found for recording. Click the Playwriter extension icon on the tab you want to record.' }
@@ -119,12 +99,12 @@ export async function handleStartRecording(params: StartRecordingParams): Promis
     return { success: false, error: 'Recording already in progress for this tab' }
   }
 
-  const tabInfo = deps.getTabs().get(tabId)
+  const tabInfo = store.getState().tabs.get(tabId)
   if (!tabInfo || tabInfo.state !== 'connected') {
     return { success: false, error: 'Tab is not connected' }
   }
 
-  deps.logger.debug('Starting recording for tab:', tabId, 'params:', params)
+  logger.debug('Starting recording for tab:', tabId, 'params:', params)
 
   try {
     // Ensure offscreen document exists
@@ -150,7 +130,7 @@ export async function handleStartRecording(params: StartRecordingParams): Promis
       })
     })
 
-    deps.logger.debug('Got stream ID for tab:', tabId, 'streamId:', streamId.substring(0, 20) + '...')
+    logger.debug('Got stream ID for tab:', tabId, 'streamId:', streamId.substring(0, 20) + '...')
 
     // Send message to offscreen document to start recording
     const result = await chrome.runtime.sendMessage({
@@ -173,22 +153,18 @@ export async function handleStartRecording(params: StartRecordingParams): Promis
     activeRecordings.set(tabId, { tabId, startedAt })
 
     // Update tab state
-    deps.updateTabRecordingState(tabId, true)
+    updateTabRecordingState(tabId, true)
 
-    deps.logger.debug('Recording started for tab:', tabId, 'mimeType:', result.mimeType)
+    logger.debug('Recording started for tab:', tabId, 'mimeType:', result.mimeType)
     return { success: true, tabId, startedAt }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    deps.logger.error('Failed to start recording:', error)
+    logger.error('Failed to start recording:', error)
     return { success: false, error: errorMessage }
   }
 }
 
 export async function handleStopRecording(params: StopRecordingParams): Promise<ExtensionStopRecordingResult> {
-  if (!deps) {
-    throw new Error('Recording module not initialized')
-  }
-
   const tabId = resolveTabIdFromSessionId(params.sessionId)
   if (!tabId) {
     return { success: false, error: 'No connected tab found' }
@@ -199,7 +175,7 @@ export async function handleStopRecording(params: StopRecordingParams): Promise<
     return { success: false, error: 'No active recording for this tab' }
   }
 
-  deps.logger.debug('Stopping recording for tab:', tabId)
+  logger.debug('Stopping recording for tab:', tabId)
 
   try {
     // Send message to offscreen document to stop recording - include tabId for concurrent support
@@ -216,22 +192,18 @@ export async function handleStopRecording(params: StopRecordingParams): Promise<
 
     // Clean up
     activeRecordings.delete(tabId)
-    deps.updateTabRecordingState(tabId, false)
+    updateTabRecordingState(tabId, false)
 
-    deps.logger.debug('Recording stopped for tab:', tabId, 'duration:', duration)
+    logger.debug('Recording stopped for tab:', tabId, 'duration:', duration)
     return { success: true, tabId, duration }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    deps.logger.error('Failed to stop recording:', error)
+    logger.error('Failed to stop recording:', error)
     return { success: false, error: errorMessage }
   }
 }
 
 export async function handleIsRecording(params: IsRecordingParams): Promise<IsRecordingResult> {
-  if (!deps) {
-    throw new Error('Recording module not initialized')
-  }
-
   const tabId = resolveTabIdFromSessionId(params.sessionId)
   if (!tabId) {
     return { isRecording: false }
@@ -261,10 +233,6 @@ export async function handleIsRecording(params: IsRecordingParams): Promise<IsRe
 }
 
 export async function handleCancelRecording(params: CancelRecordingParams): Promise<CancelRecordingResult> {
-  if (!deps) {
-    throw new Error('Recording module not initialized')
-  }
-
   const tabId = resolveTabIdFromSessionId(params.sessionId)
   if (!tabId) {
     return { success: false, error: 'No connected tab found' }
@@ -275,7 +243,7 @@ export async function handleCancelRecording(params: CancelRecordingParams): Prom
     return { success: true } // Already not recording
   }
 
-  deps.logger.debug('Cancelling recording for tab:', tabId)
+  logger.debug('Cancelling recording for tab:', tabId)
 
   try {
     // Send message to offscreen document to cancel recording - include tabId for concurrent support
@@ -285,11 +253,11 @@ export async function handleCancelRecording(params: CancelRecordingParams): Prom
     })
 
     activeRecordings.delete(tabId)
-    deps.updateTabRecordingState(tabId, false)
+    updateTabRecordingState(tabId, false)
 
     // Send cancel marker
-    if (deps.isWebSocketOpen()) {
-      deps.sendMessage({
+    if (connectionManager.ws?.readyState === WebSocket.OPEN) {
+      sendMessage({
         method: 'recordingCancelled',
         params: { tabId },
       })
@@ -298,7 +266,7 @@ export async function handleCancelRecording(params: CancelRecordingParams): Prom
     return { success: true }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    deps.logger.error('Failed to cancel recording:', error)
+    logger.error('Failed to cancel recording:', error)
     return { success: false, error: errorMessage }
   }
 }
@@ -307,18 +275,14 @@ export async function handleCancelRecording(params: CancelRecordingParams): Prom
  * Clean up recordings when tab is disconnected.
  */
 export async function cleanupRecordingForTab(tabId: number): Promise<void> {
-  if (!deps) {
-    return
-  }
-
   const recording = activeRecordings.get(tabId)
   if (recording) {
-    deps.logger.debug('Cleaning up recording for disconnected tab:', tabId)
+    logger.debug('Cleaning up recording for disconnected tab:', tabId)
     try {
       // Tell offscreen document to cancel recording - include tabId for concurrent support
       await chrome.runtime.sendMessage({ action: 'cancelRecording', tabId })
     } catch (e) {
-      deps.logger.debug('Error cleaning up recording:', e)
+      logger.debug('Error cleaning up recording:', e)
     }
     activeRecordings.delete(tabId)
   }
