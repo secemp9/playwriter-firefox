@@ -481,31 +481,6 @@ console.log(data);
 
 Clean up listeners when done: `page.removeAllListeners('request'); page.removeAllListeners('response');`
 
-## reading response bodies
-
-By default, playwriter disables CDP response body buffering to ensure SSE streaming works properly. If you need to read response bodies (e.g., for HAR recording or inspecting API responses), re-enable buffering first:
-
-```js
-// Get CDP session and re-enable Network buffering
-const cdp = await getCDPSession({ page });
-await cdp.send('Network.disable');
-await cdp.send('Network.enable', {
-  maxTotalBufferSize: 10000000,   // 10MB total buffer
-  maxResourceBufferSize: 5000000  // 5MB per resource
-});
-
-// Now use Playwright's response API - it will work because buffering is enabled
-const [response] = await Promise.all([
-  page.waitForResponse(resp => resp.url().includes('/api/data')),
-  page.click('button.load-data')
-]);
-
-const body = await response.text();  // or response.json(), response.body()
-console.log(body);
-```
-
-**Note**: This may cause SSE/streaming responses to buffer. Only enable when you specifically need response bodies.
-
 ## capabilities
 
 Examples of what playwriter can do:

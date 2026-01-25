@@ -360,23 +360,6 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
         })
       }
 
-      // Network.enable: Default to zero buffering to fix SSE streaming issues.
-      // CDP's Network domain buffers response bodies by default, which breaks ReadableStream
-      // for SSE/streaming responses. Setting maxTotalBufferSize: 0 disables this buffering.
-      // Agents can re-enable buffering by calling Network.disable then Network.enable with
-      // explicit buffer sizes if they need to read response bodies via Network.getResponseBody.
-      case 'Network.enable': {
-        const modifiedParams = {
-          maxTotalBufferSize: 0,
-          maxResourceBufferSize: 0,
-          ...params
-        }
-        return await sendToExtension({
-          method: 'forwardCDPCommand',
-          params: { sessionId, method, params: modifiedParams }
-        })
-      }
-
       case 'Runtime.enable': {
         if (!sessionId) {
           break
