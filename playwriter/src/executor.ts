@@ -581,7 +581,10 @@ export class PlaywrightExecutor {
         return screenshotWithAccessibilityLabels({
           ...options,
           collector: screenshotCollector,
-          logger: { error: (...args) => { this.logger.error('[playwriter]', ...args) } },
+          logger: {
+            info: (...args) => { this.logger.error('[playwriter]', ...args) },
+            error: (...args) => { this.logger.error('[playwriter]', ...args) },
+          },
         })
       }
       
@@ -725,5 +728,3 @@ export class ExecutorManager {
     })
   }
 }
-
-
