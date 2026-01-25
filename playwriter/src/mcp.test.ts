@@ -2634,7 +2634,7 @@ describe('MCP Server Tests', () => {
         })
         await new Promise(r => setTimeout(r, 200))
 
-        const outputPath = path.join(process.cwd(), 'tmp', 'test-recording.webm')
+        const outputPath = path.join(process.cwd(), 'tmp', 'test-recording.mp4')
         if (!fs.existsSync(path.dirname(outputPath))) {
             fs.mkdirSync(path.dirname(outputPath), { recursive: true })
         }

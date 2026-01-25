@@ -429,7 +429,7 @@ Labels are color-coded: yellow=links, orange=buttons, coral=inputs, pink=checkbo
 // Start recording - outputPath must be specified upfront
 await startRecording({ 
   page, 
-  outputPath: './recording.webm',
+  outputPath: './recording.mp4',
   frameRate: 30,        // default: 30
   audio: false,         // default: false (tab audio)
   videoBitsPerSecond: 2500000  // 2.5 Mbps
