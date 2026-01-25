@@ -182,7 +182,7 @@ class ConnectionManager {
         logger.debug('Error handling command:', error)
         response.error = error.message
       }
-      logger.debug('Sending response:', response)
+      // logger.debug('Sending response:', response)
       sendMessage(response)
     }
 

@@ -49,9 +49,7 @@ make sure you have tsx installed globally: `pnpm i -g tsx`
 
 ### running CLI locally
 
-
-
-to test CLI changes without publishing you will also have to kill the relay server first, to have the latest relay server running. any commands using the cli then will restart this relay server.
+to test CLI changes without publishing:
 
 ```bash
  # mac/linux: kill any existing relay on 19988
