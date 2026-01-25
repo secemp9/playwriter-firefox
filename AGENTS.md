@@ -129,7 +129,7 @@ remember: toggling extension on a tab adds it to available pages. if you toggle 
 
 IMPORTANT: set bash timeout to at least 90000ms when running `pnpm test`
 
-to debug test failures, inspect the relay server log file: `playwriter logfile` (e.g. `/tmp/playwriter/relay-server.log`). contains extension, MCP and WS server logs with all CDP events.
+to debug test failures, inspect the relay server log file. during tests, logs are written to `./relay-server.log` in the playwriter folder (not the system temp directory). contains extension, MCP and WS server logs with all CDP events.
 
 ### project structure
 
