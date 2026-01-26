@@ -61,7 +61,6 @@ const EXTENSION_NOT_CONNECTED_ERROR = `The Playwriter Chrome extension is not co
 const NO_TABS_ENABLED_ERROR = `No browser tabs have Playwriter enabled. Click the extension icon on at least one tab to enable it.`
 
 const MAX_LOGS_PER_PAGE = 5000
-const DEFAULT_PLAYWRIGHT_TIMEOUT = 10_000
 
 const ALLOWED_MODULES = new Set([
   'path', 'node:path',
@@ -286,8 +285,6 @@ export class PlaywrightExecutor {
     }
     const page = pages[0]
 
-    context.setDefaultTimeout(DEFAULT_PLAYWRIGHT_TIMEOUT)
-
     context.pages().forEach((p) => this.setupPageConsoleListener(p))
 
     await this.preserveSystemColorScheme(context)
@@ -362,8 +359,6 @@ export class PlaywrightExecutor {
     }
     const page = pages[0]
 
-    context.setDefaultTimeout(DEFAULT_PLAYWRIGHT_TIMEOUT)
-
     context.pages().forEach((p) => this.setupPageConsoleListener(p))
 
     await this.preserveSystemColorScheme(context)
@@ -400,6 +395,7 @@ export class PlaywrightExecutor {
       await this.ensureConnection()
       const page = await this.getCurrentPage(timeout)
       const context = this.context || page.context()
+      context.setDefaultTimeout(timeout)
 
       this.logger.log('Executing code:', code)
 
