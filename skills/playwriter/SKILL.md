@@ -1,38 +1,30 @@
 ---
 name: playwriter
-description: Control the user own Chrome browser via Playwriter extension with Playwright code snippets in a stateful local js sandbox via playwriter cli. Automate web interactions, take screenshots, inspect accessibility trees, debug & profile web applications. ALWAYS run `playwriter skill` command to read the complete up to date skill
+description: Control the user own Chrome browser via Playwriter extension with Playwright code snippets in a stateful local js sandbox via playwriter cli. Automate web interactions, take screenshots, inspect accessibility trees, debug & profile web applications. Run `playwriter skill` command to read the complete up to date skill
 ---
 
-## Quick Start
+## REQUIRED: Read Full Documentation First
 
-```bash
-# Get a session ID first
-playwriter session new
-# => 1
-
-# Execute code with your session
-playwriter -s 1 -e "await page.goto('https://example.com')"
-playwriter -s 1 -e "console.log(await accessibilitySnapshot({ page }))"
-playwriter -s 1 -e "await page.screenshot({ path: 'shot.png', scale: 'css' })"
-```
-
-If `playwriter` is not found, use `npx playwriter@latest` or `bunx playwriter@latest`.
-
-## Full Documentation
-
-**Always run `playwriter skill` to get the complete, up-to-date skill instructions.**
-
-The skill command outputs detailed docs on:
-- Session management
-- Context variables (`state`, `page`, `context`)
-- Best practices and rules
-- Accessibility snapshots and screenshots
-- Selector strategies
-- Working with pages, navigation, popups, downloads
-- Utility functions (`getCleanHTML`, `getCDPSession`, `createDebugger`, etc.)
-- Network interception for API scraping
-- And more...
+**Before using playwriter, you MUST run this command:**
 
 ```bash
 playwriter skill
 ```
+
+This outputs the complete documentation including:
+- Session management and timeout configuration
+- Selector strategies (and which ones to AVOID)
+- Rules to prevent timeouts and failures
+- Best practices for slow pages and SPAs
+- Context variables, utility functions, and more
+
+**Do NOT skip this step.** The quick examples below will fail without understanding timeouts, selector rules, and common pitfalls from the full docs.
+
+## Minimal Example (after reading full docs)
+
+```bash
+playwriter session new
+playwriter -s 1 -e "await page.goto('https://example.com')"
+```
+
+If `playwriter` is not found, use `npx playwriter@latest` or `bunx playwriter@latest`.
