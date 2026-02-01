@@ -633,7 +633,7 @@ describe('Snapshot & Screenshot Tests', () => {
         console.log('Button selector:', btnSelector)
 
         // Verify the selector works
-        const btnViaSelector = cdpPage!.locator('[data-testid="submit-btn"]')
+        const btnViaSelector = cdpPage!.locator(btnSelector!)
         const btnTextViaRef = await btnViaSelector.textContent()
         console.log('Button text via selector:', btnTextViaRef)
         expect(btnTextViaRef).toBe('Submit Form')
