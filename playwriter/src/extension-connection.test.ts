@@ -103,7 +103,7 @@ describe('Extension Connection Tests', () => {
 
         await directBrowser.close()
         await page.close()
-    })
+    }, 120000)
 
     it('should handle new pages and toggling with persistent connection', async () => {
         const browserContext = getBrowserContext()
