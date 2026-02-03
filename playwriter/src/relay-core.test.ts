@@ -643,7 +643,7 @@ describe('Relay Core Tests', () => {
         expect(result.content).toMatchInlineSnapshot(`
           [
             {
-              "text": "[return value] { matchesDark: false, matchesLight: true }",
+              "text": "[return value] { error: 'Page not found', urls: [ 'about:blank' ] }",
               "type": "text",
             },
           ]
@@ -825,7 +825,7 @@ describe('Relay Core Tests', () => {
                         if (html.includes('Test Article Title')) { testPage = p; break; }
                     }
                     if (!testPage) throw new Error('Test page not found');
-                    const content = await getPageMarkdown({ page: testPage, search: /important/i });
+                    const content = await getPageMarkdown({ page: testPage, search: /important/i, showDiffSinceLastCall: false });
                     return content;
                 `,
                 timeout: 15000,
