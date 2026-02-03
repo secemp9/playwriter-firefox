@@ -278,6 +278,9 @@ type SnapshotLine = {
   text: string
   baseLocator?: string
   hasChildren?: boolean
+  role?: string
+  name?: string
+  indent?: number
 }
 
 type SnapshotNode = {
@@ -302,7 +305,7 @@ function buildSnapshotLine({ role, name, baseLocator, indent, hasChildren }: {
     const escapedName = name.replace(/"/g, '\\"')
     text += ` "${escapedName}"`
   }
-  return { text, baseLocator, hasChildren }
+  return { text, baseLocator, hasChildren, role, name, indent }
 }
 
 function buildTextLine(text: string, indent: number): SnapshotLine {
@@ -317,6 +320,27 @@ function unindentLines(lines: SnapshotLine[]): SnapshotLine[] {
       ? { ...line, text: line.text.slice(2) }
       : line
   })
+}
+
+function buildLocatorLineText({ line, locator }: { line: SnapshotLine; locator: string }): string {
+  const prefix = '  '.repeat(line.indent ?? 0)
+  const role = line.role ?? ''
+  const name = line.name ?? ''
+  const escapedName = name.replace(/"/g, '\\"')
+
+  const hasRoleInLocator = role ? locator.includes(role) : false
+  const hasNameInLocator = name ? locator.includes(escapedName) : false
+
+  const parts: string[] = []
+  if (role && !hasRoleInLocator) {
+    parts.push(role)
+  }
+  if (name && !hasNameInLocator) {
+    parts.push(`"${escapedName}"`)
+  }
+
+  const base = parts.length > 0 ? `${prefix}- ${parts.join(' ')}` : `${prefix}-`
+  return `${base} ${locator}`
 }
 
 function finalizeSnapshotOutput(lines: SnapshotLine[], nodes: SnapshotNode[]): { snapshot: string; tree: AriaSnapshotNode[] } {
@@ -347,7 +371,7 @@ function finalizeSnapshotOutput(lines: SnapshotLine[], nodes: SnapshotNode[]): {
     if (line.baseLocator) {
       const locator = locatorSequence[lineLocatorIndex]
       lineLocatorIndex += 1
-      text = `${text} ${locator}`
+      text = buildLocatorLineText({ line, locator })
     }
     if (line.hasChildren) {
       text += ':'
@@ -451,7 +475,7 @@ function isTextRole(role: string): boolean {
 /**
  * Get an accessibility snapshot with utilities to look up refs for elements.
  * Uses the browser accessibility tree (CDP) and maps nodes to DOM attributes.
- * 
+ *
  * Refs are generated from stable test IDs when available (data-testid, data-test-id, etc.)
  * or fall back to e1, e2, e3...
  *
