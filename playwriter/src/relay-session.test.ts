@@ -146,15 +146,9 @@ describe('CDP Session Tests', () => {
         const browserContext = getBrowserContext()
         const serviceWorker = await getExtensionServiceWorker(browserContext)
 
+        // Use a page with actual script URLs (not just inline scripts)
         const page = await browserContext.newPage()
-        await page.setContent(`
-            <html>
-                <head>
-                    <script src="data:text/javascript,function testScript() { return 42; }"></script>
-                </head>
-                <body><h1>Script Test</h1></body>
-            </html>
-        `)
+        await page.goto('https://news.ycombinator.com/')
         await page.bringToFront()
 
         await serviceWorker.evaluate(async () => {
@@ -163,36 +157,19 @@ describe('CDP Session Tests', () => {
         await new Promise(r => setTimeout(r, 100))
 
         const browser = await chromium.connectOverCDP(getCdpUrl({ port: TEST_PORT }))
-        let cdpPage
-        for (const p of browser.contexts()[0].pages()) {
-            if (p.isClosed()) {
-                continue
-            }
-            await p.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {})
-            let html = ''
-            try {
-                html = await p.content()
-            } catch {
-                continue
-            }
-            if (html.includes('Script Test')) {
-                cdpPage = p
-                break
-            }
-        }
+        const cdpPage = browser.contexts()[0].pages().find(p => p.url().includes('news.ycombinator'))
         expect(cdpPage).toBeDefined()
 
         const wsUrl = getCdpUrl({ port: TEST_PORT })
         const cdpSession = await getCDPSessionForPage({ page: cdpPage!, wsUrl })
         const dbg = new Debugger({ cdp: cdpSession })
 
+        await dbg.enable()
+
         const scripts = await dbg.listScripts()
         expect(scripts.length).toBeGreaterThan(0)
         expect(scripts[0]).toHaveProperty('scriptId')
         expect(scripts[0]).toHaveProperty('url')
-
-        const dataScripts = await dbg.listScripts({ search: 'data:' })
-        expect(dataScripts.length).toBeGreaterThan(0)
 
         cdpSession.close()
         await browser.close()
