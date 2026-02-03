@@ -98,7 +98,8 @@ async function buildBundle(config: BundleConfig): Promise<void> {
     entryPath = path.join(srcDir, config.entry)
   } else {
     // Create temporary entry file for wrapper bundles
-    entryPath = path.join(distDir, `_${config.name}-entry.js`)
+    const entrySuffix = `${process.pid}-${Date.now()}`
+    entryPath = path.join(distDir, `_${config.name}-entry-${entrySuffix}.js`)
     fs.writeFileSync(entryPath, config.code)
     cleanupEntry = true
   }
@@ -113,7 +114,7 @@ async function buildBundle(config: BundleConfig): Promise<void> {
   })
 
   // Cleanup temporary entry file
-  if (cleanupEntry) {
+  if (cleanupEntry && fs.existsSync(entryPath)) {
     fs.unlinkSync(entryPath)
   }
 
