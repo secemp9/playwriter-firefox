@@ -1134,7 +1134,7 @@ async function getLabelBoxesForRefs({
  * await page.locator('[data-testid="submit-btn"]').click()
  * ```
  */
-export async function showAriaRefLabels({ page, locator, interactiveOnly = false, wsUrl, logger }: {
+export async function showAriaRefLabels({ page, locator, interactiveOnly = true, wsUrl, logger }: {
   page: Page
   locator?: Locator
   interactiveOnly?: boolean
@@ -1245,7 +1245,7 @@ export async function hideAriaRefLabels({ page }: { page: Page }): Promise<void>
  * await page.locator('[data-testid="submit-btn"]').click()
  * ```
  */
-export async function screenshotWithAccessibilityLabels({ page, locator, interactiveOnly = false, wsUrl, collector, logger }: {
+export async function screenshotWithAccessibilityLabels({ page, locator, interactiveOnly = true, wsUrl, collector, logger }: {
   page: Page
   locator?: Locator
   interactiveOnly?: boolean
