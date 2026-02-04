@@ -113,7 +113,7 @@ If you find a bug, you can create a gh issue using `gh issue create -R remorses/
 
 # playwriter best practices
 
-Control user's Chrome browser via playwright code snippets. Prefer single-line code with semicolons between statements. If you get "extension is not connected" or "no browser tabs have Playwriter enabled" error, tell user to click the playwriter extension icon on the tab they want to control.
+Control user's Chrome browser via playwright code snippets. Prefer single-line code with semicolons between statements. Use playwriter immediately without waiting for user actions; only if you get "extension is not connected" or "no browser tabs have Playwriter enabled" should you ask the user to click the playwriter extension icon on the target tab.
 
 You can collaborate with the user - they can help with captchas, difficult elements, or reproducing bugs.
 
