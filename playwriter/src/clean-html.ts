@@ -83,6 +83,9 @@ export async function getCleanHTML(options: GetCleanHTMLOptions): Promise<string
       newContent: htmlStr,
       label: 'html',
     })
+    if (diffResult.type === 'no-change') {
+      return 'No changes since last call. Use showDiffSinceLastCall: false to see full content.'
+    }
     return diffResult.content
   }
 

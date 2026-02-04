@@ -571,6 +571,9 @@ export class PlaywrightExecutor {
             newContent: snapshotStr,
             label: 'snapshot',
           })
+          if (diffResult.type === 'no-change') {
+            return 'No changes since last snapshot. Use showDiffSinceLastCall: false to see full content.'
+          }
           return diffResult.content
         }
 
@@ -869,7 +872,7 @@ export class PlaywrightExecutor {
       if (finalText.length > MAX_LENGTH) {
         finalText =
           finalText.slice(0, MAX_LENGTH) +
-          `\n\n[Truncated to ${MAX_LENGTH} characters. Better manage your logs or paginate them to read the full logs]`
+          `\n\n[Truncated to ${MAX_LENGTH} characters. Use search to find specific content]`
       }
 
       const images = screenshotCollector.map((s) => ({ data: s.base64, mimeType: s.mimeType }))

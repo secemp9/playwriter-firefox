@@ -179,6 +179,9 @@ export async function getPageMarkdown(options: GetPageMarkdownOptions): Promise<
       newContent: markdown,
       label: 'content',
     })
+    if (diffResult.type === 'no-change') {
+      return 'No changes since last call. Use showDiffSinceLastCall: false to see full content.'
+    }
     return diffResult.content
   }
 

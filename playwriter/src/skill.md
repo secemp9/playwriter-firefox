@@ -245,7 +245,7 @@ await accessibilitySnapshot({ page, search?, showDiffSinceLastCall? })
 - `search` - string/regex to filter results (returns first 10 matching lines)
 - `showDiffSinceLastCall` - returns diff since last snapshot (default: `true`). Pass `false` to get full snapshot.
 
-Snapshots return full content on first call, then diffs on subsequent calls. Diff is only returned when shorter than full content.
+Snapshots return full content on first call, then diffs on subsequent calls. If nothing changed, returns "No changes since last snapshot" message. Use `showDiffSinceLastCall: false` to always get full content.
 
 Example output:
 
