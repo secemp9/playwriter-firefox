@@ -76,6 +76,7 @@ type ExtensionConnection = {
   id: string
   ws: WSContext
   info: ExtensionInfo
+  stableKey: string
   connectedTargets: Map<string, ConnectedTarget>
   pendingRequests: Map<number, { resolve: (result: any) => void; reject: (error: Error) => void }>
   messageId: number
@@ -104,6 +105,7 @@ export async function startPlayWriterCDPRelayServer({
 } = {}): Promise<RelayServer> {
   const emitter = new EventEmitter()
   const extensionConnections = new Map<string, ExtensionConnection>()
+  const extensionKeyIndex = new Map<string, string>()
 
   const resolvedCdpLogger = cdpLogger || createCdpLogger()
   const logCdpJson = (entry: CdpLogEntry) => {
@@ -115,17 +117,44 @@ export async function startPlayWriterCDPRelayServer({
     return extensionConnections.keys().next().value || null
   }
 
-  const getExtensionConnection = (extensionId?: string | null): ExtensionConnection | null => {
-    // If specific extensionId requested, only return that one (no fallback)
+  const getExtensionConnection = (
+    extensionId?: string | null,
+    options: { allowFallback?: boolean } = {}
+  ): ExtensionConnection | null => {
     if (extensionId) {
-      return extensionConnections.get(extensionId) || null
+      const direct = extensionConnections.get(extensionId)
+      if (direct) {
+        return direct
+      }
+      const mappedId = extensionKeyIndex.get(extensionId)
+      if (mappedId) {
+        return extensionConnections.get(mappedId) || null
+      }
+      return null
     }
-    // Only fallback to default when no extensionId specified
+
+    if (!options.allowFallback) {
+      return null
+    }
+
     const fallbackId = getDefaultExtensionId()
     if (fallbackId) {
       return extensionConnections.get(fallbackId) || null
     }
     return null
+  }
+
+  const buildStableExtensionKey = (info: ExtensionInfo, connectionId: string): string => {
+    if (info.id) {
+      return `profile:${info.id}`
+    }
+    if (info.email) {
+      return `email:${info.email}`
+    }
+    if (info.browser) {
+      return `browser:${info.browser}`
+    }
+    return `connection:${connectionId}`
   }
 
   const normalizeSessionId = (value: string | number | null | undefined): string | null => {
@@ -366,7 +395,8 @@ export async function startPlayWriterCDPRelayServer({
   const recordingRelays = new Map<string, RecordingRelay>()
 
   const getRecordingRelay = (extensionId?: string | null): RecordingRelay | null => {
-    const connection = getExtensionConnection(extensionId)
+    const allowDefault = !extensionId && extensionConnections.size === 1
+    const connection = getExtensionConnection(extensionId, { allowFallback: allowDefault })
     if (!connection) {
       return null
     }
@@ -621,7 +651,7 @@ export async function startPlayWriterCDPRelayServer({
   })
 
   app.get('/extension/status', (c) => {
-    const defaultExtension = getExtensionConnection(null)
+    const defaultExtension = getExtensionConnection(null, { allowFallback: true })
     const connected = extensionConnections.size > 0
     const activeTargets = defaultExtension?.connectedTargets.size || 0
     const info = defaultExtension?.info
@@ -638,6 +668,7 @@ export async function startPlayWriterCDPRelayServer({
     const extensions = Array.from(extensionConnections.values()).map((extension) => {
       return {
         extensionId: extension.id,
+        stableKey: extension.stableKey,
         browser: extension.info.browser || null,
         profile: extension.info ? { email: extension.info.email || '', id: extension.info.id || '' } : null,
         activeTargets: extension.connectedTargets.size,
@@ -667,7 +698,7 @@ export async function startPlayWriterCDPRelayServer({
     })
     .on(['GET', 'PUT'], '/json/list', (c) => {
       const wsUrl = getCdpWsUrl(c)
-      const defaultTargets = getExtensionConnection(null)?.connectedTargets || new Map()
+      const defaultTargets = getExtensionConnection(null, { allowFallback: true })?.connectedTargets || new Map()
       return c.json(
         Array.from(defaultTargets.values()).map(t => ({
           id: t.targetId,
@@ -682,7 +713,7 @@ export async function startPlayWriterCDPRelayServer({
     })
     .on(['GET', 'PUT'], '/json/list/', (c) => {
       const wsUrl = getCdpWsUrl(c)
-      const defaultTargets = getExtensionConnection(null)?.connectedTargets || new Map()
+      const defaultTargets = getExtensionConnection(null, { allowFallback: true })?.connectedTargets || new Map()
       return c.json(
         Array.from(defaultTargets.values()).map(t => ({
           id: t.targetId,
@@ -697,7 +728,7 @@ export async function startPlayWriterCDPRelayServer({
     })
     .on(['GET', 'PUT'], '/json', (c) => {
       const wsUrl = getCdpWsUrl(c)
-      const defaultTargets = getExtensionConnection(null)?.connectedTargets || new Map()
+      const defaultTargets = getExtensionConnection(null, { allowFallback: true })?.connectedTargets || new Map()
       return c.json(
         Array.from(defaultTargets.values()).map(t => ({
           id: t.targetId,
@@ -712,7 +743,7 @@ export async function startPlayWriterCDPRelayServer({
     })
     .on(['GET', 'PUT'], '/json/', (c) => {
       const wsUrl = getCdpWsUrl(c)
-      const defaultTargets = getExtensionConnection(null)?.connectedTargets || new Map()
+      const defaultTargets = getExtensionConnection(null, { allowFallback: true })?.connectedTargets || new Map()
       return c.json(
         Array.from(defaultTargets.values()).map(t => ({
           id: t.targetId,
@@ -772,18 +803,29 @@ export async function startPlayWriterCDPRelayServer({
     const url = new URL(c.req.url, 'http://localhost')
     const requestedExtensionId = url.searchParams.get('extensionId')
     const resolvedExtension = getExtensionConnection(requestedExtensionId)
-    const clientExtensionId = resolvedExtension?.id || null
+    const allowDefault = !requestedExtensionId && extensionConnections.size === 1
+    const defaultExtension = allowDefault ? getExtensionConnection(null, { allowFallback: true }) : null
+    const clientExtensionId = resolvedExtension?.id || defaultExtension?.id || null
 
     return {
       async onOpen(_event, ws) {
         if (playwrightClients.has(clientId)) {
-          logger?.log(pc.red(`Rejecting duplicate client ID: ${clientId}`))
-          ws.close(1000, 'Client ID already connected')
+          logger?.log(pc.yellow(`Rejecting duplicate Playwright clientId: ${clientId}`))
+          ws.close(4004, 'Duplicate Playwright clientId')
+          return
+        }
+
+        if (!clientExtensionId) {
+          const reason = requestedExtensionId
+            ? `Unknown extensionId: ${requestedExtensionId}`
+            : 'Multiple extensions connected. Specify extensionId.'
+          logger?.log(pc.yellow(`Rejecting Playwright client ${clientId}: ${reason}`))
+          ws.close(4003, reason)
           return
         }
 
         // Add client first so it can receive Target.attachedToTarget events
-        playwrightClients.set(clientId, { id: clientId, ws, extensionId: clientExtensionId || null })
+        playwrightClients.set(clientId, { id: clientId, ws, extensionId: clientExtensionId })
         const extensionConnection = getExtensionConnection(clientExtensionId)
         const targetCount = extensionConnection?.connectedTargets.size || 0
         logger?.log(pc.green(`Playwright client connected: ${clientId} (${playwrightClients.size} total) (extension? ${!!extensionConnection}) (${targetCount} pages)`))
@@ -987,16 +1029,28 @@ export async function startPlayWriterCDPRelayServer({
     const connectionId = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
     return {
       onOpen(_event, ws) {
+        const stableKey = buildStableExtensionKey(incomingExtensionInfo, connectionId)
+        const existingId = extensionKeyIndex.get(stableKey)
+        if (existingId && existingId !== connectionId) {
+          logger?.log(pc.yellow(`Replacing extension connection for ${stableKey} (${existingId} -> ${connectionId})`))
+          const existingConnection = extensionConnections.get(existingId)
+          if (existingConnection) {
+            existingConnection.ws.close(4001, 'Extension Replaced')
+          }
+        }
+
         const connection: ExtensionConnection = {
           id: connectionId,
           ws,
           info: incomingExtensionInfo,
+          stableKey,
           connectedTargets: new Map(),
           pendingRequests: new Map(),
           messageId: 0,
           pingInterval: null,
         }
         extensionConnections.set(connectionId, connection)
+        extensionKeyIndex.set(stableKey, connectionId)
         startExtensionPing(connectionId)
         logger?.log(`Extension connected (${connectionId})`)
       },
@@ -1261,6 +1315,12 @@ export async function startPlayWriterCDPRelayServer({
           connection.connectedTargets.clear()
         }
 
+        if (connection) {
+          const mappedId = extensionKeyIndex.get(connection.stableKey)
+          if (mappedId === connectionId) {
+            extensionKeyIndex.delete(connection.stableKey)
+          }
+        }
         extensionConnections.delete(connectionId)
 
         for (const [clientId, client] of playwrightClients.entries()) {
@@ -1365,16 +1425,20 @@ export async function startPlayWriterCDPRelayServer({
     const sessionId = String(nextSessionNumber++)
     const extensionId = body.extensionId || null
     const cwd = body.cwd
-    const extension = getExtensionConnection(extensionId)
+    const allowDefault = !extensionId && extensionConnections.size === 1
+    const extension = getExtensionConnection(extensionId, { allowFallback: allowDefault })
     if (!extension) {
-      return c.json({ error: 'Extension not connected' }, 404)
+      const error = extensionId
+        ? `Extension not connected: ${extensionId}`
+        : 'Multiple extensions connected. Specify extensionId.'
+      return c.json({ error }, 404)
     }
     const manager = await getExecutorManager()
     const executor = manager.getExecutor({
       sessionId,
       cwd,
       sessionMetadata: {
-        extensionId: extension.id,
+        extensionId: extension.stableKey,
         browser: extension.info.browser || null,
         profile: extension.info ? { email: extension.info.email || '', id: extension.info.id || '' } : null,
       },
