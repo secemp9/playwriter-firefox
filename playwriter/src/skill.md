@@ -63,13 +63,13 @@ playwriter -s 1 -e "state.page = await context.newPage(); await state.page.goto(
 playwriter -s 1 -e "await page.click('button')"
 
 # Get page title
-playwriter -s 1 -e "console.log(await page.title())"
+playwriter -s 1 -e "await page.title()"
 
 # Take a screenshot
 playwriter -s 1 -e "await page.screenshot({ path: 'screenshot.png', scale: 'css' })"
 
 # Get accessibility snapshot
-playwriter -s 1 -e "console.log(await accessibilitySnapshot({ page }))"
+playwriter -s 1 -e "await accessibilitySnapshot({ page })"
 ```
 
 **Multiline code:**
@@ -167,7 +167,7 @@ Locators (especially ones with `>> nth=`) can change when the page updates. Alwa
 await page.locator('[id="old-id"]').click();  // element may have changed
 
 // GOOD: get fresh snapshot, then immediately use locators from it
-console.log(await accessibilitySnapshot({ page, showDiffSinceLastCall: true }));
+await accessibilitySnapshot({ page, showDiffSinceLastCall: true })
 // Now use the NEW locators from this output
 ```
 
@@ -229,7 +229,7 @@ await loginPage.waitForURL('**/callback**');
 After any action (click, submit, navigate), verify what happened:
 
 ```js
-console.log('url:', page.url()); console.log(await accessibilitySnapshot({ page }));
+page.url() + '\n' + await accessibilitySnapshot({ page })
 ```
 
 For visually complex pages (grids, galleries, dashboards), use `screenshotWithAccessibilityLabels({ page })` instead to understand spatial layout. Label refs are short `eN` strings (e.g. `e3`).
@@ -366,7 +366,7 @@ state.targetPage = pages[0];
 **List all available pages:**
 
 ```js
-console.log(context.pages().map(p => p.url()));
+context.pages().map(p => p.url())
 ```
 
 ## navigation

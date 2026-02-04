@@ -12,6 +12,7 @@ import util from 'node:util'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
+import * as acorn from 'acorn'
 import { createSmartDiff } from './diff-utils.js'
 import { getCdpUrl } from './utils.js'
 import { waitForPageLoad, WaitForPageLoadOptions, WaitForPageLoadResult } from './wait-for-page-load.js'
@@ -60,6 +61,61 @@ const usefulGlobals = {
   AbortSignal,
   structuredClone,
 } as const
+
+/**
+ * Determines if code should be auto-wrapped with `return await (...)`.
+ * Returns true for single expression statements that aren't assignments.
+ */
+export function shouldAutoReturn(code: string): boolean {
+  try {
+    const ast = acorn.parse(code, {
+      ecmaVersion: 'latest',
+      allowAwaitOutsideFunction: true,
+      allowReturnOutsideFunction: true,
+      sourceType: 'script',
+    })
+
+    // Must be exactly one statement
+    if (ast.body.length !== 1) {
+      return false
+    }
+
+    const stmt = ast.body[0]
+
+    // If it's already a return statement, don't auto-wrap
+    if (stmt.type === 'ReturnStatement') {
+      return false
+    }
+
+    // Must be an ExpressionStatement
+    if (stmt.type !== 'ExpressionStatement') {
+      return false
+    }
+
+    // Don't auto-return side-effect expressions
+    const expr = stmt.expression
+    if (
+      expr.type === 'AssignmentExpression' ||
+      expr.type === 'UpdateExpression' ||
+      (expr.type === 'UnaryExpression' && (expr as acorn.UnaryExpression).operator === 'delete')
+    ) {
+      return false
+    }
+
+    // Don't auto-return sequence expressions that contain assignments
+    if (expr.type === 'SequenceExpression') {
+      const hasAssignment = expr.expressions.some((e: acorn.Expression) => e.type === 'AssignmentExpression')
+      if (hasAssignment) {
+        return false
+      }
+    }
+
+    return true
+  } catch {
+    // Parse failed, don't auto-return
+    return false
+  }
+}
 
 const EXTENSION_NOT_CONNECTED_ERROR = `The Playwriter Chrome extension is not connected. Make sure you have:
 1. Installed the extension: https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe
@@ -721,8 +777,11 @@ export class PlaywrightExecutor {
       }
 
       const vmContext = vm.createContext(vmContextObj)
-      const wrappedCode = `(async () => { ${code} })()`
-      const hasExplicitReturn = /\breturn\b/.test(code)
+      const autoReturn = shouldAutoReturn(code)
+      const wrappedCode = autoReturn
+        ? `(async () => { return await (${code}) })()`
+        : `(async () => { ${code} })()`
+      const hasExplicitReturn = autoReturn || /\breturn\b/.test(code)
 
       const result = await Promise.race([
         vm.runInContext(wrappedCode, vmContext, { timeout, displayErrors: true }),
