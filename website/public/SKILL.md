@@ -63,13 +63,13 @@ playwriter -s 1 -e "state.page = await context.newPage(); await state.page.goto(
 playwriter -s 1 -e "await page.click('button')"
 
 # Get page title
-playwriter -s 1 -e "console.log(await page.title())"
+playwriter -s 1 -e "await page.title()"
 
 # Take a screenshot
 playwriter -s 1 -e "await page.screenshot({ path: 'screenshot.png', scale: 'css' })"
 
 # Get accessibility snapshot
-playwriter -s 1 -e "console.log(await accessibilitySnapshot({ page }))"
+playwriter -s 1 -e "await accessibilitySnapshot({ page })"
 ```
 
 **Multiline code:**
@@ -167,7 +167,7 @@ Locators (especially ones with `>> nth=`) can change when the page updates. Alwa
 await page.locator('[id="old-id"]').click();  // element may have changed
 
 // GOOD: get fresh snapshot, then immediately use locators from it
-console.log(await accessibilitySnapshot({ page, showDiffSinceLastCall: true }));
+await accessibilitySnapshot({ page, showDiffSinceLastCall: true })
 // Now use the NEW locators from this output
 ```
 
@@ -229,7 +229,7 @@ await loginPage.waitForURL('**/callback**');
 After any action (click, submit, navigate), verify what happened:
 
 ```js
-console.log('url:', page.url()); console.log(await accessibilitySnapshot({ page }));
+page.url() + '\n' + await accessibilitySnapshot({ page })
 ```
 
 For visually complex pages (grids, galleries, dashboards), use `screenshotWithAccessibilityLabels({ page })` instead to understand spatial layout. Label refs are short `eN` strings (e.g. `e3`).
@@ -245,7 +245,7 @@ await accessibilitySnapshot({ page, search?, showDiffSinceLastCall? })
 - `search` - string/regex to filter results (returns first 10 matching lines)
 - `showDiffSinceLastCall` - returns diff since last snapshot (default: `true`). Pass `false` to get full snapshot.
 
-Snapshots return full content on first call, then diffs on subsequent calls. Diff is only returned when shorter than full content.
+Snapshots return full content on first call, then diffs on subsequent calls. If nothing changed, returns "No changes since last snapshot" message. Use `showDiffSinceLastCall: false` to always get full content.
 
 Example output:
 
@@ -366,7 +366,7 @@ state.targetPage = pages[0];
 **List all available pages:**
 
 ```js
-console.log(context.pages().map(p => p.url()));
+context.pages().map(p => p.url())
 ```
 
 ## navigation
@@ -722,6 +722,25 @@ Examples of what playwriter can do:
 - Handle popups, downloads, iframes, and dialog boxes
 - Record videos of browser sessions that survive page navigation
 
+
+## Ghost Browser integration
+
+Playwriter supports [Ghost Browser](https://ghostbrowser.com/) for multi-identity automation. When running in Ghost Browser, the `chrome` object exposes APIs to control identities, proxies, and sessions - useful for managing multiple accounts, rotating proxies, or isolated cookie sessions.
+
+```js
+// List identities and open tabs in different ones
+const identities = await chrome.projects.getIdentitiesList();
+await chrome.ghostPublicAPI.openTab({ url: 'https://reddit.com', identity: identities[0].id });
+
+// Assign proxies per tab or identity
+const proxies = await chrome.ghostProxies.getList();
+await chrome.ghostProxies.setTabProxy(tabId, proxies[0].id);
+```
+
+For complete API reference with all methods, types, and examples, read:
+`extension/src/ghost-browser-api.d.ts`
+
+Note: Only works in Ghost Browser. In regular Chrome, calls fail with "not available".
 
 ## debugging playwriter issues
 
