@@ -46,6 +46,54 @@ async function getServerUrl(host?: string): Promise<string> {
   return `http://${serverHost}:${RELAY_PORT}`
 }
 
+async function fetchExtensionsStatus(host?: string): Promise<Array<{
+  extensionId: string
+  browser: string | null
+  profile: { email: string; id: string } | null
+  activeTargets: number
+}>> {
+  try {
+    const serverUrl = await getServerUrl(host)
+    const response = await fetch(`${serverUrl}/extensions/status`, {
+      signal: AbortSignal.timeout(500),
+    })
+    if (!response.ok) {
+      const fallback = await fetch(`${serverUrl}/extension/status`, {
+        signal: AbortSignal.timeout(500),
+      })
+      if (!fallback.ok) {
+        return []
+      }
+      const fallbackData = await fallback.json() as {
+        connected: boolean
+        activeTargets: number
+        browser: string | null
+        profile: { email: string; id: string } | null
+      }
+      if (!fallbackData.connected) {
+        return []
+      }
+      return [{
+        extensionId: 'default',
+        browser: fallbackData.browser,
+        profile: fallbackData.profile,
+        activeTargets: fallbackData.activeTargets,
+      }]
+    }
+    const data = await response.json() as {
+      extensions: Array<{
+        extensionId: string
+        browser: string | null
+        profile: { email: string; id: string } | null
+        activeTargets: number
+      }>
+    }
+    return data.extensions
+  } catch {
+    return []
+  }
+}
+
 async function executeCode(options: {
   code: string
   timeout: number
@@ -57,24 +105,24 @@ async function executeCode(options: {
   const cwd = process.cwd()
   const sessionId = options.sessionId || process.env.PLAYWRITER_SESSION
 
-  const serverUrl = await getServerUrl(host)
-
-  // Ensure relay server is running (only for local)
-  if (!host && !process.env.PLAYWRITER_HOST) {
-    const restarted = await ensureRelayServer({ logger: console, env: cliRelayEnv })
-    if (restarted){
-      const connected = await waitForExtension({ logger: console, timeoutMs: 10000 })
-      if (!connected) {
-        console.error('Warning: Extension not connected. Commands may fail.')
-      }
-    }
-  }
-
   // Session is required
   if (!sessionId) {
     console.error('Error: -s/--session is required.')
     console.error('Always run `playwriter session new` first to get a session ID to use.')
     process.exit(1)
+  }
+
+  const serverUrl = await getServerUrl(host)
+
+  // Ensure relay server is running (only for local)
+  if (!host && !process.env.PLAYWRITER_HOST) {
+    const restarted = await ensureRelayServer({ logger: console, env: cliRelayEnv })
+    if (restarted) {
+      const connected = await waitForExtension({ logger: console, timeoutMs: 10000 })
+      if (!connected) {
+        console.error('Warning: Extension not connected. Commands may fail.')
+      }
+    }
   }
 
   // Build request URL with token if provided
@@ -131,17 +179,81 @@ async function executeCode(options: {
 cli
   .command('session new', 'Create a new session and print the session ID')
   .option('--host <host>', 'Remote relay server host')
-  .action(async (options: { host?: string }) => {
-    const serverUrl = await getServerUrl(options.host)
-
+  .option('--browser <name>', 'Browser to use when multiple browsers are connected')
+  .action(async (options: { host?: string; browser?: string }) => {
     if (!options.host && !process.env.PLAYWRITER_HOST) {
       await ensureRelayServer({ logger: console, env: cliRelayEnv })
     }
 
+    const extensions = await fetchExtensionsStatus(options.host)
+    if (extensions.length === 0) {
+      console.error('No connected browsers detected. Click the Playwriter extension icon.')
+      process.exit(1)
+    }
+
+    let selectedExtension: { extensionId: string; browser: string | null; profile: { email: string; id: string } | null } | null = null
+
+    if (extensions.length === 1) {
+      selectedExtension = extensions[0]
+    } else if (!options.browser) {
+      console.log('Multiple browsers detected:\n')
+      console.log('ID       BROWSER  PROFILE')
+      console.log('-------  -------  -------')
+      for (const extension of extensions) {
+        const label = extension.profile?.email || '(not signed in)'
+        const shortId = extension.extensionId === 'default' ? 'default' : extension.extensionId.slice(0, 7)
+        console.log(`${shortId.padEnd(7)}  ${(extension.browser || 'Chrome').padEnd(7)}  ${label}`)
+      }
+      console.log('\nRun again with --browser <email, browser, or id>.')
+      process.exit(1)
+    } else {
+      const byEmail = extensions.find((extension) => extension.profile?.email === options.browser)
+      const byId = extensions.find((extension) => extension.extensionId === options.browser)
+      const byBrowser = extensions.filter((extension) => (extension.browser || 'Chrome') === options.browser)
+
+      selectedExtension = byEmail || byId || null
+      if (!selectedExtension && byBrowser.length === 1) {
+        selectedExtension = byBrowser[0]
+      }
+
+      if (!selectedExtension) {
+        if (byBrowser.length > 1) {
+          console.error(`Browser name is ambiguous: ${options.browser}`)
+          process.exit(1)
+        }
+        console.error(`Browser not found: ${options.browser}`)
+        process.exit(1)
+      }
+    }
+
+    if (!selectedExtension) {
+      console.error('Unable to determine browser identity.')
+      process.exit(1)
+    }
+
+    if (!options.host && !process.env.PLAYWRITER_HOST) {
+      await ensureRelayServer({ logger: console, env: cliRelayEnv })
+      const connected = await waitForExtension({ logger: console, timeoutMs: 10000 })
+      if (!connected) {
+        console.error('Warning: Extension not connected. Commands may fail.')
+      }
+    }
+
     try {
-      const res = await fetch(`${serverUrl}/cli/session/suggest`)
-      const { next } = await res.json() as { next: number }
-      console.log(`Session ${next} created. Use with: playwriter -s ${next} -e "..."`)
+      const serverUrl = await getServerUrl(options.host)
+      const extensionId = selectedExtension.extensionId === 'default' ? null : selectedExtension.extensionId
+      const response = await fetch(`${serverUrl}/cli/session/new`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extensionId }),
+      })
+      if (!response.ok) {
+        const text = await response.text()
+        console.error(`Error: ${response.status} ${text}`)
+        process.exit(1)
+      }
+      const result = await response.json() as { id: string; extensionId: string | null }
+      console.log(`Session ${result.id} created. Use with: playwriter -s ${result.id} -e "..."`)
     } catch (error: any) {
       console.error(`Error: ${error.message}`)
       process.exit(1)
@@ -152,42 +264,80 @@ cli
   .command('session list', 'List all active sessions')
   .option('--host <host>', 'Remote relay server host')
   .action(async (options: { host?: string }) => {
-    const serverUrl = await getServerUrl(options.host)
-
     if (!options.host && !process.env.PLAYWRITER_HOST) {
       await ensureRelayServer({ logger: console, env: cliRelayEnv })
     }
 
+    const serverUrl = await getServerUrl(options.host)
+    let sessions: Array<{
+      id: string
+      stateKeys: string[]
+      browser: string | null
+      profile: { email: string; id: string } | null
+      extensionId: string | null
+    }> = []
+
     try {
-      const res = await fetch(`${serverUrl}/cli/sessions`)
-      const { sessions } = await res.json() as {
+      const response = await fetch(`${serverUrl}/cli/sessions`, {
+        signal: AbortSignal.timeout(500),
+      })
+      if (!response.ok) {
+        console.error(`Error: ${response.status} ${await response.text()}`)
+        process.exit(1)
+      }
+      const result = await response.json() as {
         sessions: Array<{
           id: string
           stateKeys: string[]
+          browser: string | null
+          profile: { email: string; id: string } | null
+          extensionId: string | null
         }>
       }
-
-      if (sessions.length === 0) {
-        console.log('No active sessions')
-        return
-      }
-
-      // Calculate column widths for aligned table
-      const idWidth = Math.max(2, ...sessions.map((s) => { return String(s.id).length }))
-      const stateWidth = Math.max(10, ...sessions.map((s) => { return s.stateKeys.join(', ').length || 1 }))
-
-      // Header
-      console.log('ID'.padEnd(idWidth) + '  ' + 'State Keys')
-      console.log('-'.repeat(idWidth + stateWidth + 2))
-
-      // Rows
-      for (const session of sessions) {
-        const stateStr = session.stateKeys.length > 0 ? session.stateKeys.join(', ') : '-'
-        console.log(String(session.id).padEnd(idWidth) + '  ' + stateStr)
-      }
+      sessions = result.sessions
     } catch (error: any) {
       console.error(`Error: ${error.message}`)
       process.exit(1)
+    }
+
+    if (sessions.length === 0) {
+      console.log('No active sessions')
+      return
+    }
+
+    const idWidth = Math.max(2, ...sessions.map((session) => String(session.id).length))
+    const browserWidth = Math.max(7, ...sessions.map((session) => (session.browser || 'Chrome').length))
+    const profileWidth = Math.max(7, ...sessions.map((session) => (session.profile?.email || '').length || 1))
+    const extensionWidth = Math.max(2, ...sessions.map((session) => (session.extensionId || '').length || 1))
+    const stateWidth = Math.max(10, ...sessions.map((session) => session.stateKeys.join(', ').length || 1))
+
+    console.log(
+      'ID'.padEnd(idWidth) +
+        '  ' +
+        'BROWSER'.padEnd(browserWidth) +
+        '  ' +
+        'PROFILE'.padEnd(profileWidth) +
+        '  ' +
+        'EXT'.padEnd(extensionWidth) +
+        '  ' +
+        'STATE KEYS'
+    )
+    console.log('-'.repeat(idWidth + browserWidth + profileWidth + extensionWidth + stateWidth + 8))
+
+    for (const session of sessions) {
+      const stateStr = session.stateKeys.length > 0 ? session.stateKeys.join(', ') : '-'
+      const profileLabel = session.profile?.email || '-'
+      console.log(
+        String(session.id).padEnd(idWidth) +
+          '  ' +
+          (session.browser || 'Chrome').padEnd(browserWidth) +
+          '  ' +
+          profileLabel.padEnd(profileWidth) +
+          '  ' +
+          (session.extensionId || '-').padEnd(extensionWidth) +
+          '  ' +
+          stateStr
+      )
     }
   })
 

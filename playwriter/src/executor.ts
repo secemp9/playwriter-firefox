@@ -181,10 +181,18 @@ export interface CdpConfig {
   host?: string
   port?: number
   token?: string
+  extensionId?: string | null
+}
+
+export interface SessionMetadata {
+  extensionId: string | null
+  browser: string | null
+  profile: { email: string; id: string } | null
 }
 
 export interface ExecutorOptions {
   cdpConfig: CdpConfig
+  sessionMetadata?: SessionMetadata
   logger?: ExecutorLogger
   /** Working directory for scoped fs access */
   cwd?: string
@@ -216,10 +224,12 @@ export class PlaywrightExecutor {
 
   private cdpConfig: CdpConfig
   private logger: ExecutorLogger
+  private sessionMetadata: SessionMetadata
 
   constructor(options: ExecutorOptions) {
     this.cdpConfig = options.cdpConfig
     this.logger = options.logger || { log: console.log, error: console.error }
+    this.sessionMetadata = options.sessionMetadata || { extensionId: null, browser: null, profile: null }
     // ScopedFS expects an array of allowed directories. If cwd is provided, use it; otherwise use defaults.
     this.scopedFs = new ScopedFS(options.cwd ? [options.cwd, '/tmp', os.tmpdir()] : undefined)
     this.sandboxedRequire = this.createSandboxedRequire(require)
@@ -320,8 +330,31 @@ export class PlaywrightExecutor {
   }
 
   private async checkExtensionStatus(): Promise<{ connected: boolean; activeTargets: number }> {
-    const { host = '127.0.0.1', port = 19988 } = this.cdpConfig
+    const { host = '127.0.0.1', port = 19988, extensionId } = this.cdpConfig
     try {
+      if (extensionId) {
+        const response = await fetch(`http://${host}:${port}/extensions/status`, {
+          signal: AbortSignal.timeout(2000),
+        })
+        if (!response.ok) {
+          const fallback = await fetch(`http://${host}:${port}/extension/status`, {
+            signal: AbortSignal.timeout(2000),
+          })
+          if (!fallback.ok) {
+            return { connected: false, activeTargets: 0 }
+          }
+          return (await fallback.json()) as { connected: boolean; activeTargets: number }
+        }
+        const data = await response.json() as {
+          extensions: Array<{ extensionId: string; activeTargets: number }>
+        }
+        const extension = data.extensions.find((item) => item.extensionId === extensionId)
+        if (!extension) {
+          return { connected: false, activeTargets: 0 }
+        }
+        return { connected: true, activeTargets: extension.activeTargets }
+      }
+
       const response = await fetch(`http://${host}:${port}/extension/status`, {
         signal: AbortSignal.timeout(2000),
       })
@@ -910,6 +943,10 @@ export class PlaywrightExecutor {
   getStateKeys(): string[] {
     return Object.keys(this.userState)
   }
+
+  getSessionMetadata(): SessionMetadata {
+    return this.sessionMetadata
+  }
 }
 
 /**
@@ -917,19 +954,25 @@ export class PlaywrightExecutor {
  */
 export class ExecutorManager {
   private executors = new Map<string, PlaywrightExecutor>()
-  private cdpConfig: CdpConfig
+  private cdpConfig: CdpConfig | ((sessionId: string) => CdpConfig)
   private logger: ExecutorLogger
 
-  constructor(options: { cdpConfig: CdpConfig; logger?: ExecutorLogger }) {
+  constructor(options: { cdpConfig: CdpConfig | ((sessionId: string) => CdpConfig); logger?: ExecutorLogger }) {
     this.cdpConfig = options.cdpConfig
     this.logger = options.logger || { log: console.log, error: console.error }
   }
 
-  getExecutor(sessionId: string, cwd?: string): PlaywrightExecutor {
+  getExecutor(options: { sessionId: string; cwd?: string; sessionMetadata?: SessionMetadata }): PlaywrightExecutor {
+    const { sessionId, cwd, sessionMetadata } = options
     let executor = this.executors.get(sessionId)
     if (!executor) {
+      const baseConfig = typeof this.cdpConfig === 'function' ? this.cdpConfig(sessionId) : this.cdpConfig
+      const cdpConfig = sessionMetadata?.extensionId
+        ? { ...baseConfig, extensionId: sessionMetadata.extensionId }
+        : baseConfig
       executor = new PlaywrightExecutor({
-        cdpConfig: this.cdpConfig,
+        cdpConfig,
+        sessionMetadata,
         logger: this.logger,
         cwd,
       })
@@ -942,11 +985,25 @@ export class ExecutorManager {
     return this.executors.delete(sessionId)
   }
 
-  listSessions(): Array<{ id: string; stateKeys: string[] }> {
+  getSession(sessionId: string): PlaywrightExecutor | null {
+    return this.executors.get(sessionId) || null
+  }
+
+  listSessions(): Array<{
+    id: string
+    stateKeys: string[]
+    extensionId: string | null
+    browser: string | null
+    profile: { email: string; id: string } | null
+  }> {
     return [...this.executors.entries()].map(([id, executor]) => {
+      const metadata = executor.getSessionMetadata()
       return {
         id,
         stateKeys: executor.getStateKeys(),
+        extensionId: metadata.extensionId,
+        browser: metadata.browser,
+        profile: metadata.profile,
       }
     })
   }

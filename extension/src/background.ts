@@ -14,11 +14,81 @@ import {
   cleanupRecordingForTab,
 } from './recording'
 
-const RELAY_PORT = process.env.PLAYWRITER_PORT
-const RELAY_URL = `ws://127.0.0.1:${RELAY_PORT}/extension`
+const RELAY_HOST = '127.0.0.1'
+const RELAY_PORT = Number(process.env.PLAYWRITER_PORT) || 19988
+
+type NavigatorWithUaData = Navigator & {
+  userAgentData?: {
+    brands: Array<{ brand: string; version: string }>
+  }
+}
+
+type ExtensionIdentity = {
+  browser: string
+  email: string
+  id: string
+}
+
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function detectBrowserName(): Promise<string> {
+  if ((chrome as unknown as { ghostPublicAPI?: unknown }).ghostPublicAPI) {
+    return 'Ghost'
+  }
+
+  const navigatorWithUaData = navigator as NavigatorWithUaData
+  const brands = navigatorWithUaData.userAgentData?.brands
+  if (brands && brands.length > 0) {
+    const brandNames = brands.map((brand) => {
+      return brand.brand.trim().toLowerCase()
+    })
+
+    if (brandNames.some((brand) => brand === 'brave')) return 'Brave'
+    if (brandNames.some((brand) => brand === 'microsoft edge')) return 'Edge'
+    if (brandNames.some((brand) => brand === 'opera')) return 'Opera'
+    if (brandNames.some((brand) => brand === 'vivaldi')) return 'Vivaldi'
+    if (brandNames.some((brand) => brand === 'google chrome')) return 'Chrome'
+    if (brandNames.some((brand) => brand === 'chromium')) return 'Chromium'
+  }
+
+  const ua = navigator.userAgent.toLowerCase()
+  if (ua.includes('edg/')) return 'Edge'
+  if (ua.includes('opr/')) return 'Opera'
+  if (ua.includes('vivaldi')) return 'Vivaldi'
+  if (ua.includes('brave')) return 'Brave'
+  if (ua.includes('chrome')) return 'Chrome'
+  return 'Chromium'
+}
+
+let identityPromise: Promise<ExtensionIdentity> | null = null
+
+async function getExtensionIdentity(): Promise<ExtensionIdentity> {
+  if (identityPromise) {
+    return identityPromise
+  }
+
+  identityPromise = (async () => {
+    const browser = await detectBrowserName()
+    try {
+      const info = await chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' })
+      return {
+        browser,
+        email: info.email || '',
+        id: info.id || '',
+      }
+    } catch {
+      return {
+        browser,
+        email: '',
+        id: '',
+      }
+    }
+  })()
+
+  return identityPromise
 }
 
 let childSessions: Map<string, { tabId: number; targetId?: string }> = new Map()
@@ -106,14 +176,14 @@ class ConnectionManager {
   }
 
   private async connect(): Promise<void> {
-    logger.debug(`Waiting for server at http://127.0.0.1:${RELAY_PORT}...`)
+    logger.debug(`Waiting for server at http://${RELAY_HOST}:${RELAY_PORT}...`)
 
     // Retry for up to 5 seconds with 1s intervals, then give up (maintain loop will retry later)
     // Using fewer attempts since maintainLoop retries every 3 seconds anyway
     const maxAttempts = 5
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        await fetch(`http://127.0.0.1:${RELAY_PORT}`, { method: 'HEAD', signal: AbortSignal.timeout(2000) })
+        await fetch(`http://${RELAY_HOST}:${RELAY_PORT}`, { method: 'HEAD', signal: AbortSignal.timeout(2000) })
         logger.debug('Server is available')
         break
       } catch {
@@ -125,8 +195,19 @@ class ConnectionManager {
       }
     }
 
-    logger.debug('Creating WebSocket connection to:', RELAY_URL)
-    const socket = new WebSocket(RELAY_URL)
+    const identity = await getExtensionIdentity()
+    const relayUrl = new URL(`ws://${RELAY_HOST}:${RELAY_PORT}/extension`)
+    if (identity.browser) {
+      relayUrl.searchParams.set('browser', identity.browser)
+    }
+    if (identity.email) {
+      relayUrl.searchParams.set('email', identity.email)
+    }
+    if (identity.id) {
+      relayUrl.searchParams.set('id', identity.id)
+    }
+    logger.debug('Creating WebSocket connection to:', relayUrl)
+    const socket = new WebSocket(relayUrl.toString())
 
     await new Promise<void>((resolve, reject) => {
       let settled = false
@@ -389,7 +470,7 @@ class ConnectionManager {
       // Slot is free when: no extension connected, OR connected but no active tabs.
       if (store.getState().connectionState === 'extension-replaced') {
         try {
-          const response = await fetch(`http://127.0.0.1:${RELAY_PORT}/extension/status`, { method: 'GET', signal: AbortSignal.timeout(2000) })
+          const response = await fetch(`http://${RELAY_HOST}:${RELAY_PORT}/extension/status`, { method: 'GET', signal: AbortSignal.timeout(2000) })
           const data = await response.json() as { connected: boolean; activeTargets: number }
           const slotAvailable = !data.connected || data.activeTargets === 0
           if (slotAvailable) {
@@ -1369,7 +1450,7 @@ store.subscribe((state, prevState) => {
   }
 })
 
-logger.debug(`Using relay URL: ${RELAY_URL}`)
+logger.debug(`Using relay host: ${RELAY_HOST}, port: ${RELAY_PORT}`)
 
 // Memory monitoring - helps debug service worker termination issues
 let lastMemoryUsage = 0

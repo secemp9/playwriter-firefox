@@ -9,10 +9,28 @@ export const EXTENSION_IDS = [
   'pebbngnfojnignonigcnkdilknapkgid', // Dev extension (stable ID from manifest key)
 ]
 
-export function getCdpUrl({ port = 19988, host = '127.0.0.1', token }: { port?: number; host?: string; token?: string } = {}) {
+export function getCdpUrl({
+  port = 19988,
+  host = '127.0.0.1',
+  token,
+  extensionId,
+}: {
+  port?: number
+  host?: string
+  token?: string
+  extensionId?: string | null
+} = {}) {
   const id = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}`
-  const queryString = token ? `?token=${token}` : ''
-  return `ws://${host}:${port}/cdp/${id}${queryString}`
+  const params = new URLSearchParams()
+  if (token) {
+    params.set('token', token)
+  }
+  if (extensionId) {
+    params.set('extensionId', extensionId)
+  }
+  const queryString = params.toString()
+  const suffix = queryString ? `?${queryString}` : ''
+  return `ws://${host}:${port}/cdp/${id}${suffix}`
 }
 
 const LOG_BASE_DIR = os.platform() === 'win32' ? os.tmpdir() : '/tmp'
