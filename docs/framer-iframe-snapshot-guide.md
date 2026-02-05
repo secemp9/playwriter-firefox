@@ -23,9 +23,9 @@ prompt: |
 
 - Press Command+K to open the command palette.
 
-- Verify the palette is open (search for the palette input in the snapshot output):
+- Verify the palette is open (look for the command dialog and MCP entry in the snapshot output):
 ```bash
-playwriter -s 1 -e "console.log(await accessibilitySnapshot({ page, search: /Command palette|Search commands|Type a command/ }));"
+playwriter -s 1 -e "console.log(await accessibilitySnapshot({ page, search: /dialog|Search…|MCP/ }));"
 ```
 
 - Search for **MCP**, press Enter, then wait about 1 second for the plugin iframe to appear.
