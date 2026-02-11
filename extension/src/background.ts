@@ -859,6 +859,13 @@ async function handleCommand(msg: ExtensionCommandMessage): Promise<any> {
       if (!debuggee) {
         throw new Error(`No debuggee found for Runtime.enable (sessionId: ${msg.params.sessionId})`)
       }
+      // Keep Runtime.enable bound to the incoming child sessionId for OOPIF iframes.
+      // If we send Runtime.enable on the tab root session, child iframe targets never
+      // emit Runtime.executionContextCreated and frame locators can hang.
+      const runtimeSession: chrome.debugger.DebuggerSession = {
+        ...debuggee,
+        sessionId: msg.params.sessionId !== targetTab?.sessionId ? msg.params.sessionId : undefined,
+      }
       // When multiple Playwright clients connect to the same tab, each calls Runtime.enable.
       // If Runtime is already enabled, the enable call succeeds but Chrome doesn't re-send
       // Runtime.executionContextCreated events - those were already sent to the first client.
@@ -866,12 +873,12 @@ async function handleCommand(msg: ExtensionCommandMessage): Promise<any> {
       // re-enable, ensuring the new client receives them. The relay server waits for the
       // executionContextCreated events before returning. See cdp-timing.md for details.
       try {
-        await chrome.debugger.sendCommand(debuggee, 'Runtime.disable')
+        await chrome.debugger.sendCommand(runtimeSession, 'Runtime.disable')
         await sleep(50)
       } catch (e) {
         logger.debug('Error disabling Runtime (ignoring):', e)
       }
-      return await chrome.debugger.sendCommand(debuggee, 'Runtime.enable', msg.params.params)
+      return await chrome.debugger.sendCommand(runtimeSession, 'Runtime.enable', msg.params.params)
     }
 
     case 'Target.createTarget': {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.71
+
+### Bug Fixes
+
+- **Route Runtime.enable to child CDP sessions**: Runtime enable/disable now uses the incoming `sessionId` when targeting OOPIF child sessions instead of always using the tab root session. This fixes missing `Runtime.executionContextCreated` events for child iframe targets, which could cause iframe locator operations to hang.
+
 ## 0.0.69
 
 ### Features

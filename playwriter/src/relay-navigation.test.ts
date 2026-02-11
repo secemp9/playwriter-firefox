@@ -171,6 +171,122 @@ describe('Relay Navigation Tests', () => {
         }
     }, 60000)
 
+    it('should resolve locators for cross-origin iframe that starts with empty src', async () => {
+        const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        const childServer = await createSimpleServer({
+            routes: {
+                '/login.html': '<!doctype html><html><body><button id="login-btn">Login</button></body></html>',
+                '/canvas.html': '<!doctype html><html><body><button id="canvas-btn">Canvas</button></body></html>',
+            },
+        })
+        const loginUrl = `${childServer.baseUrl}/login.html`
+        const canvasUrl = `${childServer.baseUrl}/canvas.html`
+
+        const parentServer = await createSimpleServer({
+            routes: {
+                // Reproduces Framer-like plugin iframes: attached with empty src first,
+                // then navigated cross-origin after auto-attach is active.
+                '/': `<!doctype html>
+<html>
+  <body>
+    <iframe id="plugin-frame"></iframe>
+    <script>
+      window.startPluginFlow = () => {
+        const frame = document.getElementById('plugin-frame');
+        frame.src = '${loginUrl}';
+        setTimeout(() => {
+          frame.src = '${canvasUrl}';
+        }, 150);
+      };
+    </script>
+  </body>
+</html>`,
+            },
+        })
+
+        const page = await browserContext.newPage()
+        try {
+            await withTimeout({
+                promise: page.goto(parentServer.baseUrl, { waitUntil: 'domcontentloaded', timeout: 5000 }),
+                timeoutMs: 6000,
+                errorMessage: 'Timed out loading parent page for empty-src iframe test',
+            })
+            await page.bringToFront()
+
+            await withTimeout({
+                promise: serviceWorker.evaluate(async () => {
+                    await globalThis.toggleExtensionForActiveTab()
+                }),
+                timeoutMs: 5000,
+                errorMessage: 'Timed out toggling extension for empty-src iframe test',
+            })
+
+            const browser = await withTimeout({
+                promise: chromium.connectOverCDP(getCdpUrl({ port: TEST_PORT })),
+                timeoutMs: 5000,
+                errorMessage: 'Timed out connecting over CDP for empty-src iframe test',
+            })
+
+            try {
+                const context = browser.contexts()[0]
+                const cdpPage = context.pages().find((candidate) => {
+                    return candidate.url().startsWith(parentServer.baseUrl)
+                })
+                expect(cdpPage).toBeDefined()
+
+                await withTimeout({
+                    promise: page.evaluate(() => {
+                        ;(window as Window & { startPluginFlow?: () => void }).startPluginFlow?.()
+                    }),
+                    timeoutMs: 3000,
+                    errorMessage: 'Timed out starting plugin iframe flow',
+                })
+
+                const pluginFrame = await withTimeout({
+                    promise: (async () => {
+                        for (let attempt = 0; attempt < 40; attempt += 1) {
+                            const frame = cdpPage!.frames().find((candidate) => {
+                                return candidate.url() === loginUrl || candidate.url() === canvasUrl
+                            })
+                            if (frame) {
+                                return frame
+                            }
+                            await cdpPage!.waitForTimeout(100)
+                        }
+                        throw new Error('Plugin frame did not appear with expected URL')
+                    })(),
+                    timeoutMs: 5000,
+                    errorMessage: 'Timed out waiting for plugin frame URL in empty-src iframe test',
+                })
+
+                const buttonCount = await withTimeout({
+                    promise: pluginFrame.locator('button').count(),
+                    timeoutMs: 5000,
+                    errorMessage: 'Timed out counting button locator in empty-src iframe test',
+                })
+                expect(buttonCount).toBe(1)
+            } finally {
+                await withTimeout({
+                    promise: browser.close(),
+                    timeoutMs: 5000,
+                    errorMessage: 'Timed out closing CDP browser for empty-src iframe test',
+                })
+            }
+        } finally {
+            await withTimeout({
+                promise: page.close(),
+                timeoutMs: 5000,
+                errorMessage: 'Timed out closing page for empty-src iframe test',
+            })
+            await Promise.all([
+                parentServer.close(),
+                childServer.close(),
+            ])
+        }
+    }, 60000)
+
     it('should have non-empty URLs when connecting to already-loaded pages', async () => {
         const _browserContext = getBrowserContext()
         const serviceWorker = await getExtensionServiceWorker(_browserContext)
