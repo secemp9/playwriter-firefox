@@ -11,12 +11,13 @@ import { getCdpUrl } from './utils.js'
 import { getCDPSessionForPage } from './cdp-session.js'
 import type { CDPCommand } from './cdp-types.js'
 import { screenshotWithAccessibilityLabels } from './aria-snapshot.js'
-import { setupTestContext, cleanupTestContext, getExtensionServiceWorker, type TestContext, js } from './test-utils.js'
+import { setupTestContext, cleanupTestContext, getExtensionServiceWorker, type TestContext, js, isFirefoxTest } from './test-utils.js'
 import './test-declarations.js'
 
 const TEST_PORT = 19991
 
-describe('Snapshot & Screenshot Tests', () => {
+// Skip for Firefox: requires Chrome extension service worker and CDP relay
+describe.skipIf(isFirefoxTest())('Snapshot & Screenshot Tests', () => {
     let client: Awaited<ReturnType<typeof createMCPClient>>['client']
     let cleanup: (() => Promise<void>) | null = null
     let testCtx: TestContext | null = null

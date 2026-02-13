@@ -18,7 +18,7 @@ import type {
 } from './protocol.js'
 import pc from 'picocolors'
 import { EventEmitter } from 'node:events'
-import { VERSION, EXTENSION_IDS } from './utils.js'
+import { VERSION, EXTENSION_IDS, FIREFOX_EXTENSION_IDS, ALL_EXTENSION_IDS } from './utils.js'
 import { createCdpLogger, type CdpLogEntry, type CdpLogger } from './cdp-log.js'
 import { RecordingRelay } from './recording-relay.js'
 
@@ -47,7 +47,7 @@ function isRestrictedTarget(targetInfo: Protocol.Target.TargetInfo): boolean {
     return false
   }
 
-  // Allow our own extension pages
+  // Allow our own Chrome extension pages
   if (url.startsWith('chrome-extension://')) {
     const extensionId = url.replace('chrome-extension://', '').split('/')[0]
     if (EXTENSION_IDS.includes(extensionId)) {
@@ -56,8 +56,23 @@ function isRestrictedTarget(targetInfo: Protocol.Target.TargetInfo): boolean {
     return true
   }
 
+  // Allow our own Firefox extension pages
+  if (url.startsWith('moz-extension://')) {
+    const extensionId = url.replace('moz-extension://', '').split('/')[0]
+    // Firefox extension IDs are UUIDs, check if it matches our known IDs pattern
+    if (FIREFOX_EXTENSION_IDS.some(id => extensionId.includes(id.replace(/[{}@.]/g, '')))) {
+      return false
+    }
+    return true
+  }
+
+  // Allow about:blank and about:srcdoc (commonly used for testing and iframes)
+  if (url === 'about:blank' || url === 'about:srcdoc') {
+    return false
+  }
+
   // Block other restricted URLs
-  const blockedPrefixes = ['chrome://', 'devtools://', 'edge://']
+  const blockedPrefixes = ['chrome://', 'devtools://', 'edge://', 'about:']
   return blockedPrefixes.some((prefix) => url.startsWith(prefix))
 }
 
@@ -638,14 +653,24 @@ export async function startPlayWriterCDPRelayServer({
   // WebSocket connections have their own separate origin validation.
   app.use('*', cors({
     origin: (origin) => {
-      if (!origin.startsWith('chrome-extension://')) {
+      // Allow Chrome extensions
+      if (origin.startsWith('chrome-extension://')) {
+        const extensionId = origin.replace('chrome-extension://', '')
+        if (EXTENSION_IDS.includes(extensionId)) {
+          return origin
+        }
         return null
       }
-      const extensionId = origin.replace('chrome-extension://', '')
-      if (!EXTENSION_IDS.includes(extensionId)) {
+      // Allow Firefox extensions (moz-extension://)
+      if (origin.startsWith('moz-extension://')) {
+        const extensionId = origin.replace('moz-extension://', '')
+        // Firefox IDs are UUIDs - check if it matches our pattern
+        if (FIREFOX_EXTENSION_IDS.some(id => extensionId.includes(id.replace(/[{}@.]/g, '')))) {
+          return origin
+        }
         return null
       }
-      return origin
+      return null
     },
     allowMethods: ['GET', 'POST', 'HEAD', 'OPTIONS'],
   }))
@@ -796,6 +821,14 @@ export async function startPlayWriterCDPRelayServer({
         const extensionId = origin.replace('chrome-extension://', '')
         if (!EXTENSION_IDS.includes(extensionId)) {
           logger?.log(pc.red(`Rejecting /cdp WebSocket from unknown extension: ${extensionId}`))
+          return c.text('Forbidden', 403)
+        }
+      } else if (origin.startsWith('moz-extension://')) {
+        // Allow Firefox extension origins (Firefox uses native Playwright support, not CDP relay)
+        // but may still connect for recording coordination
+        const extensionId = origin.replace('moz-extension://', '')
+        if (!FIREFOX_EXTENSION_IDS.some(id => extensionId.includes(id.replace(/[{}@.]/g, '')))) {
+          logger?.log(pc.red(`Rejecting /cdp WebSocket from unknown Firefox extension: ${extensionId}`))
           return c.text('Forbidden', 403)
         }
       } else {
@@ -1405,6 +1438,411 @@ export async function startPlayWriterCDPRelayServer({
       }
     }
   }))
+
+  // ============================================================================
+  // Firefox Extension Endpoint - Recording coordination only (no CDP relay)
+  // Firefox uses Playwright's native Firefox support (Juggler protocol) instead
+  // ============================================================================
+
+  // Firefox extension connections (separate from Chrome since they don't share CDP)
+  type FirefoxExtensionConnection = {
+    id: string
+    ws: WSContext
+    pingInterval: ReturnType<typeof setInterval> | null
+    debugBridgeConnected: boolean
+    debugBridgeProtocol: 'bidi' | 'rdp' | null
+    pendingRequests: Map<number, { resolve: (result: any) => void; reject: (error: Error) => void }>
+    messageId: number
+  }
+  const firefoxExtensionConnections = new Map<string, FirefoxExtensionConnection>()
+
+  // Send command to Firefox extension and wait for response
+  async function sendToFirefoxExtension({
+    connectionId,
+    method,
+    params,
+    timeout = 30000,
+  }: {
+    connectionId: string
+    method: string
+    params?: unknown
+    timeout?: number
+  }): Promise<unknown> {
+    const connection = firefoxExtensionConnections.get(connectionId)
+    if (!connection) {
+      throw new Error('Firefox extension not connected')
+    }
+
+    const id = ++connection.messageId
+    const message = { id, method, params }
+
+    connection.ws.send(JSON.stringify(message))
+
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        connection.pendingRequests.delete(id)
+        reject(new Error(`Firefox extension request timeout after ${timeout}ms: ${method}`))
+      }, timeout)
+
+      connection.pendingRequests.set(id, {
+        resolve: (result) => {
+          clearTimeout(timeoutId)
+          resolve(result)
+        },
+        reject: (error) => {
+          clearTimeout(timeoutId)
+          reject(error)
+        }
+      })
+    })
+  }
+
+  // Get the default Firefox extension connection
+  const getFirefoxExtensionConnection = (): FirefoxExtensionConnection | null => {
+    const connections = Array.from(firefoxExtensionConnections.values())
+    return connections[0] || null
+  }
+
+  app.get('/extension-firefox', (c, next) => {
+    // 1. Host Validation: Only accept local connections
+    const info = getConnInfo(c)
+    const remoteAddress = info.remote.address
+    const isLocalhost = remoteAddress === '127.0.0.1' || remoteAddress === '::1'
+
+    if (!isLocalhost) {
+      logger?.log(pc.red(`Rejecting /extension-firefox WebSocket from remote IP: ${remoteAddress}`))
+      return c.text('Forbidden - Extension must be local', 403)
+    }
+
+    // 2. Origin Validation: Accept moz-extension:// origins
+    const origin = c.req.header('origin')
+    if (!origin || !origin.startsWith('moz-extension://')) {
+      logger?.log(pc.red(`Rejecting /extension-firefox WebSocket: origin must be moz-extension://, got: ${origin || 'none'}`))
+      return c.text('Forbidden', 403)
+    }
+
+    // Note: Firefox extension IDs are UUIDs and may vary per installation
+    // We accept any moz-extension:// origin from localhost for now
+    logger?.log(pc.blue(`Firefox extension connecting from: ${origin}`))
+
+    return next()
+  }, upgradeWebSocket(() => {
+    const connectionId = `firefox_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+
+    return {
+      onOpen(_event, ws) {
+        const connection: FirefoxExtensionConnection = {
+          id: connectionId,
+          ws,
+          pingInterval: setInterval(() => {
+            ws.send(JSON.stringify({ method: 'ping' }))
+          }, 5000),
+          debugBridgeConnected: false,
+          debugBridgeProtocol: null,
+          pendingRequests: new Map(),
+          messageId: 0,
+        }
+        firefoxExtensionConnections.set(connectionId, connection)
+        logger?.log(pc.blue(`Firefox extension connected (${connectionId})`))
+      },
+
+      async onMessage(event, ws) {
+        const connection = firefoxExtensionConnections.get(connectionId)
+        if (!connection) {
+          ws.close(1000, 'Extension not registered')
+          return
+        }
+
+        // Handle binary data (recording chunks)
+        if (event.data instanceof ArrayBuffer || Buffer.isBuffer(event.data)) {
+          const buffer = Buffer.isBuffer(event.data) ? event.data : Buffer.from(event.data)
+          // Firefox recording relay - similar to Chrome but simpler
+          const relay = getRecordingRelay(null) // Use default relay
+          if (relay) {
+            relay.handleBinaryData(buffer)
+          }
+          return
+        }
+
+        let message: any
+        try {
+          message = JSON.parse(event.data.toString())
+        } catch {
+          ws.close(1000, 'Invalid JSON')
+          return
+        }
+
+        // Handle responses to pending requests
+        if (message.id !== undefined) {
+          const pending = connection.pendingRequests.get(message.id)
+          if (pending) {
+            connection.pendingRequests.delete(message.id)
+            if (message.error) {
+              pending.reject(new Error(message.error))
+            } else {
+              pending.resolve(message.result)
+            }
+            return
+          }
+        }
+
+        if (message.method === 'pong') {
+          // Keep-alive response, nothing to do
+          return
+        }
+
+        if (message.method === 'log') {
+          const { level, args } = message.params
+          const logFn = (logger as Record<string, unknown>)?.[level] as ((...args: unknown[]) => void) | undefined
+          const logFunc = logFn || logger?.log
+          const prefix = pc.blue(`[Firefox Extension] [${level.toUpperCase()}]`)
+          logFunc?.(prefix, ...args)
+          return
+        }
+
+        if (message.method === 'debugBridgeStatus') {
+          // Update debug bridge connection state
+          connection.debugBridgeConnected = message.params?.connected || false
+          connection.debugBridgeProtocol = message.params?.protocol || null
+          logger?.log(pc.blue(`[Firefox] Debug bridge status: connected=${connection.debugBridgeConnected} protocol=${connection.debugBridgeProtocol}`))
+          return
+        }
+
+        if (message.method === 'consoleMessage') {
+          // Forward console messages from Firefox debug bridge
+          logger?.log(pc.blue(`[Firefox Console]`), message.params)
+          return
+        }
+
+        if (message.method === 'recordingData') {
+          const relay = getRecordingRelay(null)
+          if (relay) {
+            relay.handleRecordingData(message as RecordingDataMessage)
+          }
+          return
+        }
+
+        if (message.method === 'recordingCancelled') {
+          const relay = getRecordingRelay(null)
+          if (relay) {
+            relay.handleRecordingCancelled(message as RecordingCancelledMessage)
+          }
+          return
+        }
+
+        // Firefox doesn't support CDP relay, so we just acknowledge unknown messages
+        logger?.log(pc.gray(`[Firefox] Unhandled message: ${message.method}`))
+      },
+
+      onClose(event, ws) {
+        logger?.log(pc.blue(`Firefox extension disconnected: code=${event.code} reason=${event.reason || 'none'} (${connectionId})`))
+
+        const connection = firefoxExtensionConnections.get(connectionId)
+        if (connection) {
+          if (connection.pingInterval) {
+            clearInterval(connection.pingInterval)
+          }
+          // Reject all pending requests
+          for (const pending of connection.pendingRequests.values()) {
+            pending.reject(new Error('Firefox extension disconnected'))
+          }
+          connection.pendingRequests.clear()
+        }
+        firefoxExtensionConnections.delete(connectionId)
+      },
+
+      onError(event) {
+        logger?.error('Firefox Extension WebSocket error:', event)
+      }
+    }
+  }))
+
+  // ============================================================================
+  // Firefox Debug Bridge Endpoints - For debugging via native messaging bridge
+  // ============================================================================
+
+  app.get('/firefox/debug/status', async (c) => {
+    const connection = getFirefoxExtensionConnection()
+    if (!connection) {
+      return c.json({ connected: false, extensionConnected: false })
+    }
+    return c.json({
+      connected: connection.debugBridgeConnected,
+      extensionConnected: true,
+      protocol: connection.debugBridgeProtocol,
+    })
+  })
+
+  app.post('/firefox/debug/connect', async (c) => {
+    const connection = getFirefoxExtensionConnection()
+    if (!connection) {
+      return c.json({ success: false, error: 'Firefox extension not connected' }, 503)
+    }
+
+    try {
+      const body = await c.req.json().catch(() => ({})) as { protocol?: 'bidi' | 'rdp'; port?: number; host?: string }
+      const result = await sendToFirefoxExtension({
+        connectionId: connection.id,
+        method: 'debugBridge.connect',
+        params: {
+          protocol: body.protocol || 'bidi',
+          port: body.port,
+          host: body.host,
+        },
+      }) as { success: boolean; connected?: boolean; protocol?: string; error?: string }
+
+      if (result.success) {
+        connection.debugBridgeConnected = true
+        connection.debugBridgeProtocol = (result.protocol as 'bidi' | 'rdp') || null
+      }
+
+      return c.json(result)
+    } catch (error: any) {
+      logger?.error('Firefox debug connect error:', error)
+      return c.json({ success: false, error: error.message }, 500)
+    }
+  })
+
+  app.post('/firefox/debug/disconnect', async (c) => {
+    const connection = getFirefoxExtensionConnection()
+    if (!connection) {
+      return c.json({ success: false, error: 'Firefox extension not connected' }, 503)
+    }
+
+    try {
+      const result = await sendToFirefoxExtension({
+        connectionId: connection.id,
+        method: 'debugBridge.disconnect',
+      }) as { success: boolean }
+
+      connection.debugBridgeConnected = false
+      connection.debugBridgeProtocol = null
+
+      return c.json(result)
+    } catch (error: any) {
+      logger?.error('Firefox debug disconnect error:', error)
+      return c.json({ success: false, error: error.message }, 500)
+    }
+  })
+
+  app.get('/firefox/debug/tabs', async (c) => {
+    const connection = getFirefoxExtensionConnection()
+    if (!connection) {
+      return c.json({ success: false, error: 'Firefox extension not connected' }, 503)
+    }
+
+    try {
+      const result = await sendToFirefoxExtension({
+        connectionId: connection.id,
+        method: 'debugBridge.listTabs',
+      }) as { success: boolean; tabs?: any[]; error?: string }
+
+      return c.json(result)
+    } catch (error: any) {
+      logger?.error('Firefox debug listTabs error:', error)
+      return c.json({ success: false, error: error.message }, 500)
+    }
+  })
+
+  app.post('/firefox/debug/evaluate', async (c) => {
+    const connection = getFirefoxExtensionConnection()
+    if (!connection) {
+      return c.json({ success: false, error: 'Firefox extension not connected' }, 503)
+    }
+
+    try {
+      const body = await c.req.json() as { tabId: string | number; expression: string }
+      if (!body.tabId || !body.expression) {
+        return c.json({ success: false, error: 'tabId and expression are required' }, 400)
+      }
+
+      const result = await sendToFirefoxExtension({
+        connectionId: connection.id,
+        method: 'debugBridge.evaluate',
+        params: { tabId: body.tabId, expression: body.expression },
+      }) as { success: boolean; value?: any; error?: string }
+
+      return c.json(result)
+    } catch (error: any) {
+      logger?.error('Firefox debug evaluate error:', error)
+      return c.json({ success: false, error: error.message }, 500)
+    }
+  })
+
+  app.post('/firefox/debug/navigate', async (c) => {
+    const connection = getFirefoxExtensionConnection()
+    if (!connection) {
+      return c.json({ success: false, error: 'Firefox extension not connected' }, 503)
+    }
+
+    try {
+      const body = await c.req.json() as { tabId: string | number; url: string }
+      if (!body.tabId || !body.url) {
+        return c.json({ success: false, error: 'tabId and url are required' }, 400)
+      }
+
+      const result = await sendToFirefoxExtension({
+        connectionId: connection.id,
+        method: 'debugBridge.navigate',
+        params: { tabId: body.tabId, url: body.url },
+      }) as { success: boolean; error?: string }
+
+      return c.json(result)
+    } catch (error: any) {
+      logger?.error('Firefox debug navigate error:', error)
+      return c.json({ success: false, error: error.message }, 500)
+    }
+  })
+
+  app.post('/firefox/debug/reload', async (c) => {
+    const connection = getFirefoxExtensionConnection()
+    if (!connection) {
+      return c.json({ success: false, error: 'Firefox extension not connected' }, 503)
+    }
+
+    try {
+      const body = await c.req.json() as { tabId: string | number }
+      if (!body.tabId) {
+        return c.json({ success: false, error: 'tabId is required' }, 400)
+      }
+
+      const result = await sendToFirefoxExtension({
+        connectionId: connection.id,
+        method: 'debugBridge.reload',
+        params: { tabId: body.tabId },
+      }) as { success: boolean; error?: string }
+
+      return c.json(result)
+    } catch (error: any) {
+      logger?.error('Firefox debug reload error:', error)
+      return c.json({ success: false, error: error.message }, 500)
+    }
+  })
+
+  app.post('/firefox/debug/screenshot', async (c) => {
+    const connection = getFirefoxExtensionConnection()
+    if (!connection) {
+      return c.json({ success: false, error: 'Firefox extension not connected' }, 503)
+    }
+
+    try {
+      const body = await c.req.json() as { tabId: string | number }
+      if (!body.tabId) {
+        return c.json({ success: false, error: 'tabId is required' }, 400)
+      }
+
+      const result = await sendToFirefoxExtension({
+        connectionId: connection.id,
+        method: 'debugBridge.screenshot',
+        params: { tabId: body.tabId },
+      }) as { success: boolean; screenshot?: string; error?: string }
+
+      return c.json(result)
+    } catch (error: any) {
+      logger?.error('Firefox debug screenshot error:', error)
+      return c.json({ success: false, error: error.message }, 500)
+    }
+  })
 
   // ============================================================================
   // CLI Execute Endpoints - For stateful code execution via CLI

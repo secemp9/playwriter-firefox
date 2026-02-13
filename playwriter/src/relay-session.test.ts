@@ -6,14 +6,15 @@ import { getCDPSessionForPage } from './cdp-session.js'
 import { Debugger } from './debugger.js'
 import { Editor } from './editor.js'
 import { PlaywrightExecutor } from './executor.js'
-import { setupTestContext, cleanupTestContext, getExtensionServiceWorker, createSseServer, safeCloseCDPBrowser, type TestContext, withTimeout, js } from './test-utils.js'
+import { setupTestContext, cleanupTestContext, getExtensionServiceWorker, createSseServer, safeCloseCDPBrowser, type TestContext, withTimeout, js, isFirefoxTest } from './test-utils.js'
 import './test-declarations.js'
 
 const TEST_PORT = 19993
 
 // --- CDP Session Tests ---
 
-describe('CDP Session Tests', () => {
+// Skip for Firefox: requires Chrome extension service worker and CDP relay
+describe.skipIf(isFirefoxTest())('CDP Session Tests', () => {
     let testCtx: TestContext | null = null
 
     beforeAll(async () => {
@@ -947,7 +948,8 @@ describe('CDP Session Tests', () => {
 
 // --- Service Worker Target Tests ---
 
-describe('Service Worker Target Tests', () => {
+// Skip for Firefox: requires Chrome extension service worker and CDP relay
+describe.skipIf(isFirefoxTest())('Service Worker Target Tests', () => {
     let testCtx: TestContext | null = null
 
     beforeAll(async () => {
@@ -1152,7 +1154,8 @@ describe('Service Worker Target Tests', () => {
 
 // --- Auto-enable Tests ---
 
-describe('Auto-enable Tests', () => {
+// Skip for Firefox: requires Chrome extension service worker and CDP relay
+describe.skipIf(isFirefoxTest())('Auto-enable Tests', () => {
     let testCtx: TestContext | null = null
     let client: Awaited<ReturnType<typeof createMCPClient>>['client']
     let cleanup: (() => Promise<void>) | null = null

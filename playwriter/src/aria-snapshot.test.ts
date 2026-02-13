@@ -7,7 +7,7 @@ import path from 'node:path'
 import { getAriaSnapshot } from './aria-snapshot.js'
 import { getCdpUrl } from './utils.js'
 import { getCDPSessionForPage } from './cdp-session.js'
-import { setupTestContext, cleanupTestContext, getExtensionServiceWorker, type TestContext } from './test-utils.js'
+import { setupTestContext, cleanupTestContext, getExtensionServiceWorker, type TestContext, isFirefoxTest } from './test-utils.js'
 
 const TEST_PORT = 19986
 const SNAPSHOTS_DIR = path.join(import.meta.dirname, 'aria-snapshots')
@@ -68,7 +68,8 @@ async function createHtmlServer({ htmlByPath }: { htmlByPath: Record<string, str
   }
 }
 
-describe('aria-snapshot', () => {
+// Skip for Firefox: requires Chrome extension service worker and CDP relay
+describe.skipIf(isFirefoxTest())('aria-snapshot', () => {
   let ctx: TestContext
   let page: Page
 

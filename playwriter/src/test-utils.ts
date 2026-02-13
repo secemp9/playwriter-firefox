@@ -2,13 +2,14 @@ import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import http from 'node:http'
 import net from 'node:net'
-import { chromium, BrowserContext } from '@xmorse/playwright-core'
+import { chromium, firefox, BrowserContext } from '@xmorse/playwright-core'
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
 import { startPlayWriterCDPRelayServer, type RelayServer } from './cdp-relay.js'
 import { createFileLogger } from './create-logger.js'
 import { killPortProcess } from './kill-port.js'
+import type { BrowserType } from './browser-types.js'
 
 const execAsync = promisify(exec)
 const extensionBuildQueues: Map<string, Promise<void>> = new Map()
@@ -55,16 +56,86 @@ export interface TestContext {
   browserContext: BrowserContext
   userDataDir: string
   relayServer: RelayServer
+  /** Browser type used in this context */
+  browserType: BrowserType
+}
+
+/**
+ * Get the browser type to use for tests.
+ * Can be overridden via BROWSER_TYPE environment variable.
+ */
+export function getTestBrowserType(): BrowserType {
+  const envBrowserType = process.env.BROWSER_TYPE?.toLowerCase()
+  if (envBrowserType === 'firefox') {
+    return 'firefox'
+  }
+  return 'chromium'
+}
+
+/**
+ * Check if tests are running with Firefox browser.
+ * Useful for skipping CDP-dependent tests that don't work with Firefox.
+ */
+export function isFirefoxTest(): boolean {
+  return getTestBrowserType() === 'firefox'
+}
+
+/**
+ * Check if tests are running with Chromium browser.
+ */
+export function isChromiumTest(): boolean {
+  return getTestBrowserType() === 'chromium'
+}
+
+/**
+ * Build the Firefox extension for testing.
+ */
+async function buildFirefoxExtension({ port, distDir }: { port: number; distDir: string }): Promise<void> {
+  const previous = extensionBuildQueues.get(distDir) || Promise.resolve()
+  const buildPromise = previous
+    .catch((error) => {
+      console.error('Previous Firefox extension build failed:', error)
+    })
+    .then(async () => {
+      await execAsync(`TESTING=1 PLAYWRITER_PORT=${port} PLAYWRITER_EXTENSION_DIST=${distDir} pnpm build`, { cwd: '../extension-firefox' })
+    })
+
+  extensionBuildQueues.set(distDir, buildPromise.finally(() => {}))
+  await buildPromise
 }
 
 export async function setupTestContext({
   port,
   tempDirPrefix,
   toggleExtension = false,
+  browserType,
 }: {
   port: number
   tempDirPrefix: string
   /** Create initial page and toggle extension on it */
+  toggleExtension?: boolean
+  /** Browser type to use. Defaults to BROWSER_TYPE env var or 'chromium' */
+  browserType?: BrowserType
+}): Promise<TestContext> {
+  const resolvedBrowserType = browserType || getTestBrowserType()
+
+  if (resolvedBrowserType === 'firefox') {
+    return setupFirefoxTestContext({ port, tempDirPrefix })
+  }
+
+  return setupChromiumTestContext({ port, tempDirPrefix, toggleExtension })
+}
+
+/**
+ * Setup test context for Chromium (uses CDP relay via extension).
+ */
+async function setupChromiumTestContext({
+  port,
+  tempDirPrefix,
+  toggleExtension = false,
+}: {
+  port: number
+  tempDirPrefix: string
   toggleExtension?: boolean
 }): Promise<TestContext> {
   await killPortProcess({ port }).catch(() => {})
@@ -72,9 +143,9 @@ export async function setupTestContext({
   // Use a port-scoped dist folder so parallel tests don't replace each other's extension builds.
   const distDir = `dist-${port}`
 
-  console.log('Building extension...')
+  console.log('Building Chrome extension...')
   await buildExtension({ port, distDir })
-  console.log('Extension built')
+  console.log('Chrome extension built')
 
   const localLogPath = path.join(process.cwd(), 'relay-server.log')
   const logger = createFileLogger({ logFilePath: localLogPath })
@@ -100,7 +171,50 @@ export async function setupTestContext({
     })
   }
 
-  return { browserContext, userDataDir, relayServer }
+  return { browserContext, userDataDir, relayServer, browserType: 'chromium' }
+}
+
+/**
+ * Setup test context for Firefox (uses native Playwright support).
+ * Firefox does not have CDP relay - it uses Playwright's native Juggler protocol.
+ */
+export async function setupFirefoxTestContext({
+  port,
+  tempDirPrefix,
+}: {
+  port: number
+  tempDirPrefix: string
+}): Promise<TestContext> {
+  await killPortProcess({ port }).catch(() => {})
+
+  // Use a port-scoped dist folder for Firefox extension
+  const distDir = `dist-firefox-${port}`
+
+  console.log('Building Firefox extension...')
+  await buildFirefoxExtension({ port, distDir })
+  console.log('Firefox extension built')
+
+  const localLogPath = path.join(process.cwd(), 'relay-server.log')
+  const logger = createFileLogger({ logFilePath: localLogPath })
+  // Start relay server for recording coordination (Firefox doesn't use CDP relay)
+  const relayServer = await startPlayWriterCDPRelayServer({ port, logger })
+
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), tempDirPrefix))
+
+  // Firefox uses native Playwright support, not extensions for CDP
+  // Extensions can still be loaded for recording functionality
+  const browserContext = await firefox.launchPersistentContext(userDataDir, {
+    headless: !process.env.HEADFUL,
+    // Firefox-specific options
+    firefoxUserPrefs: {
+      'devtools.debugger.remote-enabled': true,
+      'devtools.chrome.enabled': true,
+    },
+  })
+
+  console.log('Firefox browser launched')
+
+  return { browserContext, userDataDir, relayServer, browserType: 'firefox' }
 }
 
 export async function cleanupTestContext(ctx: TestContext | null, cleanup?: (() => Promise<void>) | null): Promise<void> {

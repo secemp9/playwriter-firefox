@@ -3,7 +3,7 @@
  * Used by both MCP and CLI to execute Playwright code with persistent state.
  */
 
-import { Page, Frame, Browser, BrowserContext, chromium, Locator, FrameLocator } from '@xmorse/playwright-core'
+import { Page, Frame, Browser, BrowserContext, chromium, firefox, Locator, FrameLocator } from '@xmorse/playwright-core'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -15,6 +15,7 @@ import vm from 'node:vm'
 import * as acorn from 'acorn'
 import { createSmartDiff } from './diff-utils.js'
 import { getCdpUrl } from './utils.js'
+import { getCurrentBrowserType, getBrowserCapabilities, type BrowserType } from './browser-types.js'
 import { waitForPageLoad, WaitForPageLoadOptions, WaitForPageLoadResult } from './wait-for-page-load.js'
 import { ICDPSession, getCDPSessionForPage } from './cdp-session.js'
 import { Debugger } from './debugger.js'
@@ -118,9 +119,18 @@ export function shouldAutoReturn(code: string): boolean {
   }
 }
 
-const EXTENSION_NOT_CONNECTED_ERROR = `The Playwriter Chrome extension is not connected. Make sure you have:
+const CHROME_EXTENSION_NOT_CONNECTED_ERROR = `The Playwriter Chrome extension is not connected. Make sure you have:
 1. Installed the extension: https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe
 2. Clicked the extension icon on a tab to enable it (or refreshed the page if just installed)`
+
+const FIREFOX_EXTENSION_NOT_CONNECTED_ERROR = `The Playwriter Firefox extension is not connected. Make sure you have:
+1. Installed the extension from Firefox Add-ons
+2. Firefox uses native Playwright support - no CDP relay needed
+3. Screen recording is available via the extension popup`
+
+const getExtensionNotConnectedError = (browserType: BrowserType): string => {
+  return browserType === 'firefox' ? FIREFOX_EXTENSION_NOT_CONNECTED_ERROR : CHROME_EXTENSION_NOT_CONNECTED_ERROR
+}
 
 const NO_PAGES_AVAILABLE_ERROR =
   'No Playwright pages are available. Enable Playwriter on a tab or set PLAYWRITER_AUTO_ENABLE=1 to auto-create one.'
@@ -182,6 +192,8 @@ export interface CdpConfig {
   port?: number
   token?: string
   extensionId?: string | null
+  /** Browser type - 'chromium' or 'firefox'. Defaults to PLAYWRITER_BROWSER_TYPE env var or 'chromium' */
+  browserType?: BrowserType
 }
 
 export interface SessionMetadata {
@@ -225,11 +237,14 @@ export class PlaywrightExecutor {
   private cdpConfig: CdpConfig
   private logger: ExecutorLogger
   private sessionMetadata: SessionMetadata
+  private browserType: BrowserType
 
   constructor(options: ExecutorOptions) {
     this.cdpConfig = options.cdpConfig
     this.logger = options.logger || { log: console.log, error: console.error }
     this.sessionMetadata = options.sessionMetadata || { extensionId: null, browser: null, profile: null }
+    // Browser type from config, env var, or default to chromium
+    this.browserType = options.cdpConfig.browserType || getCurrentBrowserType()
     // ScopedFS expects an array of allowed directories. If cwd is provided, use it; otherwise use defaults.
     this.scopedFs = new ScopedFS(options.cwd ? [options.cwd, '/tmp', os.tmpdir()] : undefined)
     this.sandboxedRequire = this.createSandboxedRequire(require)
@@ -271,14 +286,40 @@ export class PlaywrightExecutor {
     options.deviceScaleFactor = 2
   }
 
+  /**
+   * Preserve system color scheme by setting Playwright's internal options.
+   * The actual CDP emulation clearing is done in ensureChromiumConnection
+   * and reset() methods using clearPageEmulatedMedia.
+   */
   private async preserveSystemColorScheme(context: BrowserContext): Promise<void> {
+    // Set internal options for any new pages created via Playwright APIs
     const options = (context as any)._options
-    if (!options) {
-      return
+    if (options) {
+      options.colorScheme = 'no-override'
+      options.reducedMotion = 'no-override'
+      options.forcedColors = 'no-override'
     }
-    options.colorScheme = 'no-override'
-    options.reducedMotion = 'no-override'
-    options.forcedColors = 'no-override'
+  }
+
+  /**
+   * Clear emulated media features on a page using CDP.
+   * Empty string values mean "no override" - use system preference.
+   */
+  private async clearPageEmulatedMedia(page: Page): Promise<void> {
+    try {
+      const cdpSession = await getCDPSessionForPage({ page })
+      await cdpSession.send('Emulation.setEmulatedMedia', {
+        features: [
+          { name: 'prefers-color-scheme', value: '' },
+          { name: 'prefers-reduced-motion', value: '' },
+          { name: 'forced-colors', value: '' },
+          { name: 'prefers-contrast', value: '' },
+        ],
+      })
+    } catch (error) {
+      // Silently ignore errors - page might be closed or not support CDP
+      this.logger.log(`Failed to clear emulated media for page: ${error}`)
+    }
   }
 
   private clearUserState() {
@@ -370,15 +411,58 @@ export class PlaywrightExecutor {
     }
   }
 
+  /**
+   * Check Firefox extension status (for screen recording support).
+   * Firefox debugging uses native Playwright support, but the extension
+   * is still needed for screen recording functionality.
+   */
+  private async checkFirefoxExtensionStatus(): Promise<{
+    extensionConnected: boolean
+    debugBridgeConnected: boolean
+    protocol: 'bidi' | 'rdp' | null
+  }> {
+    const { host = '127.0.0.1', port = 19988 } = this.cdpConfig
+    try {
+      const response = await fetch(`http://${host}:${port}/firefox/debug/status`, {
+        signal: AbortSignal.timeout(2000),
+      })
+      if (!response.ok) {
+        return { extensionConnected: false, debugBridgeConnected: false, protocol: null }
+      }
+      const data = await response.json() as {
+        connected?: boolean
+        extensionConnected?: boolean
+        protocol?: 'bidi' | 'rdp' | null
+      }
+      return {
+        extensionConnected: data.extensionConnected || false,
+        debugBridgeConnected: data.connected || false,
+        protocol: data.protocol || null,
+      }
+    } catch {
+      return { extensionConnected: false, debugBridgeConnected: false, protocol: null }
+    }
+  }
+
   private async ensureConnection(): Promise<{ browser: Browser; page: Page }> {
     if (this.isConnected && this.browser && this.page) {
       return { browser: this.browser, page: this.page }
     }
 
+    // Firefox uses native Playwright support (Juggler protocol) directly
+    if (this.browserType === 'firefox') {
+      return this.ensureFirefoxConnection()
+    }
+
+    // Chromium uses CDP relay via extension
+    return this.ensureChromiumConnection()
+  }
+
+  private async ensureChromiumConnection(): Promise<{ browser: Browser; page: Page }> {
     // Check extension status first to provide better error messages
     const extensionStatus = await this.checkExtensionStatus()
     if (!extensionStatus.connected) {
-      throw new Error(EXTENSION_NOT_CONNECTED_ERROR)
+      throw new Error(getExtensionNotConnectedError('chromium'))
     }
 
     // Generate a fresh unique URL for each Playwright connection
@@ -393,12 +477,22 @@ export class PlaywrightExecutor {
     const contexts = browser.contexts()
     const context = contexts.length > 0 ? contexts[0] : await browser.newContext()
 
-    context.on('page', (page) => {
+    // Set up listener for new pages - clear emulation and set up console listener
+    context.on('page', async (page) => {
       this.setupPageConsoleListener(page)
+      // Clear forced emulation on new pages (preserve system color scheme)
+      await this.clearPageEmulatedMedia(page)
     })
 
-    context.pages().forEach((p) => this.setupPageConsoleListener(p))
+    // Process existing pages - clear emulation on all
+    for (const p of context.pages()) {
+      this.setupPageConsoleListener(p)
+      await this.clearPageEmulatedMedia(p)
+    }
+
     const page = await this.ensurePageForContext({ context, timeout: 10000 })
+    // Clear emulation on the ensured page as well (it might be newly created)
+    await this.clearPageEmulatedMedia(page)
 
     await this.preserveSystemColorScheme(context)
     await this.setDeviceScaleFactorForMacOS(context)
@@ -409,6 +503,97 @@ export class PlaywrightExecutor {
     this.isConnected = true
 
     return { browser, page }
+  }
+
+  private async ensureFirefoxConnection(): Promise<{ browser: Browser; page: Page }> {
+    // Firefox uses native Playwright support - Juggler protocol
+    // We can either launch a new Firefox or connect to an existing one
+    this.logger.log('Connecting to Firefox using native Playwright support...')
+
+    // Check if we should connect to an existing Firefox instance
+    const firefoxWsEndpoint = process.env.PLAYWRITER_FIREFOX_WS_ENDPOINT
+    if (firefoxWsEndpoint) {
+      this.logger.log(`Connecting to existing Firefox at: ${firefoxWsEndpoint}`)
+      const browser = await firefox.connect(firefoxWsEndpoint)
+
+      browser.on('disconnected', () => {
+        this.logger.log('Firefox browser disconnected, clearing connection state')
+        this.clearConnectionState()
+      })
+
+      const contexts = browser.contexts()
+      const context = contexts.length > 0 ? contexts[0] : await browser.newContext()
+
+      context.on('page', (page) => {
+        this.setupPageConsoleListener(page)
+      })
+
+      const page = await this.ensurePageForContext({ context, timeout: 10000 })
+      this.setupPageConsoleListener(page)
+      await this.preserveSystemColorScheme(context)
+
+      this.browser = browser
+      this.page = page
+      this.context = context
+      this.isConnected = true
+
+      this.logger.log('Firefox connected successfully via WebSocket')
+      return { browser, page }
+    }
+
+    // For Firefox, we use launchPersistentContext for a more realistic session
+    const userDataDir = process.env.PLAYWRITER_FIREFOX_USER_DATA_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'playwriter-firefox-'))
+
+    // Firefox debug port for WebDriver BiDi (if we want to use it externally)
+    const debugPort = parseInt(process.env.PLAYWRITER_FIREFOX_DEBUG_PORT || '0', 10) || undefined
+
+    const context = await firefox.launchPersistentContext(userDataDir, {
+      headless: process.env.PLAYWRITER_HEADLESS === '1',
+      // Firefox-specific options for debugging support
+      firefoxUserPrefs: {
+        // Enable remote debugging
+        'devtools.debugger.remote-enabled': true,
+        'devtools.chrome.enabled': true,
+        'devtools.debugger.prompt-connection': false,
+        // WebDriver BiDi support
+        'remote.enabled': true,
+        'remote.frames.enabled': true,
+        // Performance and reliability settings
+        'browser.tabs.remote.autostart': true,
+        'browser.tabs.remote.autostart.2': true,
+        // Disable first-run dialogs
+        'datareporting.policy.dataSubmissionEnabled': false,
+        'toolkit.telemetry.reportingpolicy.firstRun': false,
+      },
+      // Add debug port args if specified
+      args: debugPort ? [`--remote-debugging-port=${debugPort}`] : undefined,
+    })
+
+    context.on('page', (page) => {
+      this.setupPageConsoleListener(page)
+    })
+
+    const pages = context.pages()
+    let page: Page
+    if (pages.length > 0) {
+      page = pages[0]
+    } else {
+      page = await context.newPage()
+    }
+
+    this.setupPageConsoleListener(page)
+    await this.preserveSystemColorScheme(context)
+
+    // Firefox doesn't have a separate Browser object when using launchPersistentContext
+    // We use the context's browser() method
+    this.browser = context.browser() || null
+    this.page = page
+    this.context = context
+    this.isConnected = true
+
+    this.logger.log('Firefox connected successfully')
+
+    return { browser: this.browser as Browser, page }
   }
 
   private async getCurrentPage(timeout = 10000): Promise<Page> {
@@ -445,14 +630,29 @@ export class PlaywrightExecutor {
         this.logger.error('Error closing browser:', e)
       }
     }
+    // For Firefox, also close the context if it exists (since we may not have a browser reference)
+    if (this.browserType === 'firefox' && this.context) {
+      try {
+        await this.context.close()
+      } catch (e) {
+        this.logger.error('Error closing context:', e)
+      }
+    }
 
     this.clearConnectionState()
     this.clearUserState()
 
+    // Firefox uses native Playwright support
+    if (this.browserType === 'firefox') {
+      const { page, browser } = await this.ensureFirefoxConnection()
+      return { page, context: this.context! }
+    }
+
+    // Chromium uses CDP relay
     // Check extension status first to provide better error messages
     const extensionStatus = await this.checkExtensionStatus()
     if (!extensionStatus.connected) {
-      throw new Error(EXTENSION_NOT_CONNECTED_ERROR)
+      throw new Error(getExtensionNotConnectedError('chromium'))
     }
 
     // Generate a fresh unique URL for each Playwright connection
@@ -467,12 +667,22 @@ export class PlaywrightExecutor {
     const contexts = browser.contexts()
     const context = contexts.length > 0 ? contexts[0] : await browser.newContext()
 
-    context.on('page', (page) => {
+    // Set up listener for new pages - clear emulation and set up console listener
+    context.on('page', async (page) => {
       this.setupPageConsoleListener(page)
+      // Clear forced emulation on new pages (preserve system color scheme)
+      await this.clearPageEmulatedMedia(page)
     })
 
-    context.pages().forEach((p) => this.setupPageConsoleListener(p))
+    // Process existing pages - clear emulation on all
+    for (const p of context.pages()) {
+      this.setupPageConsoleListener(p)
+      await this.clearPageEmulatedMedia(p)
+    }
+
     const page = await this.ensurePageForContext({ context, timeout: 10000 })
+    // Clear emulation on the ensured page as well (it might be newly created)
+    await this.clearPageEmulatedMedia(page)
 
     await this.preserveSystemColorScheme(context)
     await this.setDeviceScaleFactorForMacOS(context)
@@ -893,7 +1103,7 @@ export class PlaywrightExecutor {
 
     const extensionStatus = await this.checkExtensionStatus()
     if (!extensionStatus.connected) {
-      throw new Error(EXTENSION_NOT_CONNECTED_ERROR)
+      throw new Error(getExtensionNotConnectedError(this.browserType))
     }
 
     if (!process.env.PLAYWRITER_AUTO_ENABLE) {

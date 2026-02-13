@@ -3,11 +3,21 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Playwriter extension IDs - used for validation and Chrome flag commands
+// Playwriter Chrome extension IDs - used for validation and Chrome flag commands
 export const EXTENSION_IDS = [
   'jfeammnjpkecdekppnclgkkffahnhfhe', // Production (Chrome Web Store)
   'pebbngnfojnignonigcnkdilknapkgid', // Dev extension (stable ID from manifest key)
 ]
+
+// Playwriter Firefox extension IDs - UUID format as required by Firefox
+// Firefox uses UUIDs for extension identification
+export const FIREFOX_EXTENSION_IDS = [
+  'playwriter@anthropic.com', // Production (Firefox Add-ons)
+  '{deadbeef-dead-beef-dead-beefdeadbeef}', // Dev extension (stable ID for development)
+]
+
+// Combined extension IDs for both browsers
+export const ALL_EXTENSION_IDS = [...EXTENSION_IDS, ...FIREFOX_EXTENSION_IDS]
 
 export function getCdpUrl({
   port = 19988,

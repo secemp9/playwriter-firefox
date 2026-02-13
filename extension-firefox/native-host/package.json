@@ -1,0 +1,17 @@
+{
+  "name": "playwriter-firefox-debug-bridge",
+  "version": "0.0.1",
+  "description": "Native messaging debug bridge for Playwriter Firefox extension",
+  "type": "module",
+  "main": "debug-bridge.js",
+  "bin": {
+    "playwriter-debug-bridge": "./debug-bridge.js"
+  },
+  "scripts": {
+    "start": "node debug-bridge.js",
+    "install-host": "node install.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { chromium, type Page } from '@xmorse/playwright-core'
 import { getCdpUrl } from './utils.js'
-import { setupTestContext, cleanupTestContext, getExtensionServiceWorker, type TestContext, withTimeout, createSimpleServer } from './test-utils.js'
+import { setupTestContext, cleanupTestContext, getExtensionServiceWorker, type TestContext, withTimeout, createSimpleServer, isFirefoxTest } from './test-utils.js'
 import './test-declarations.js'
 
 const TEST_PORT = 19992
 
-describe('Relay Navigation Tests', () => {
+// Skip for Firefox: requires Chrome extension service worker and CDP relay
+describe.skipIf(isFirefoxTest())('Relay Navigation Tests', () => {
     let testCtx: TestContext | null = null
 
     beforeAll(async () => {
@@ -260,6 +261,10 @@ describe('Relay Navigation Tests', () => {
                     timeoutMs: 5000,
                     errorMessage: 'Timed out waiting for plugin frame URL in empty-src iframe test',
                 })
+
+                // Wait for the frame's DOM to be ready after navigation
+                // The frame URL may be correct but the DOM loading is async
+                await cdpPage!.waitForTimeout(300)
 
                 const buttonCount = await withTimeout({
                     promise: pluginFrame.locator('button').count(),

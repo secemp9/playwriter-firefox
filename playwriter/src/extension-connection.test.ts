@@ -2,12 +2,13 @@ import { createMCPClient } from './mcp-client.js'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { chromium } from '@xmorse/playwright-core'
 import { getCdpUrl } from './utils.js'
-import { setupTestContext, cleanupTestContext, getExtensionServiceWorker, type TestContext, js } from './test-utils.js'
+import { setupTestContext, cleanupTestContext, getExtensionServiceWorker, type TestContext, js, isFirefoxTest } from './test-utils.js'
 import './test-declarations.js'
 
 const TEST_PORT = 19990
 
-describe('Extension Connection Tests', () => {
+// Skip for Firefox: requires Chrome extension service worker and CDP relay
+describe.skipIf(isFirefoxTest())('Extension Connection Tests', () => {
     let client: Awaited<ReturnType<typeof createMCPClient>>['client']
     let cleanup: (() => Promise<void>) | null = null
     let testCtx: TestContext | null = null

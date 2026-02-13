@@ -3,9 +3,11 @@
     "private": true,
     "scripts": {
         "test": "pnpm --filter playwriter test",
+        "test:firefox": "BROWSER_TYPE=firefox pnpm --filter playwriter test",
         "watch": "pnpm -r watch",
         "cli": "pnpm --filter playwriter cli",
         "build": "pnpm --filter playwriter --filter mcp-extension build",
+        "build:firefox": "pnpm --filter playwriter build && pnpm --filter playwriter-firefox-extension build",
         "reload": "pnpm --filter playwriter build && pnpm --filter mcp-extension reload",
         "agents.md": "agentsdotmd ./PLAYWRITER_AGENTS.md core.md typescript.md pnpm.md vitest.md changelog.md docs-writing.md github.md playwright.md zod.md gitchamber.md",
         "release": "pnpm --filter playwriter build && cd extension && PRODUCTION=true PLAYWRITER_EXTENSION_DIST=dist-release pnpm build && cd .. && rm -f extension.zip && cd extension && zip -r ../extension.zip dist-release && cd .. && realpath extension.zip | pbcopy && open 'https://chrome.google.com/webstore/devconsole/a379d569-9533-44e4-9749-0368f6dbf878/jfeammnjpkecdekppnclgkkffahnhfhe/edit/package'",
@@ -25,5 +27,10 @@
     "license": "",
     "dependencies": {
         "mcp-extension": "workspace:*"
+    },
+    "pnpm": {
+        "overrides": {
+            "get-stream": "^5.2.0"
+        }
     }
 }
